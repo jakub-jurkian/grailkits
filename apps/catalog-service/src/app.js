@@ -1,8 +1,10 @@
 const express = require("express");
 const pool = require("./config/db");
+const prisma = require('./config/prisma');
 
 const CategoryRepository = require("./repositories/category.repository");
 const ProductRepository = require('./repositories/product.repository');
+const ProductDetailsRepository = require('./repositories/product-details.repository');
 const ProductService = require('./services/product.service');
 const ProductController = require('./controllers/product.controller');
 
@@ -17,7 +19,8 @@ const categoryRepo = new CategoryRepository(pool);
 
 // Products (Proper 3-Tier Architecture)
 const productRepo = new ProductRepository(pool);
-const productService = new ProductService(productRepo);
+const productDetailsRepo = new ProductDetailsRepository(prisma);
+const productService = new ProductService(productRepo, productDetailsRepo);
 const productController = new ProductController(productService);
 
 
@@ -35,6 +38,7 @@ app.get('/api/v1/categories', async (req, res) => {
 
 // Products Route
 app.get('/api/v1/products', productController.getProducts);
+app.get('/api/v1/products/:id', productController.getProductDetails);
 
 
 // start server
