@@ -1,0 +1,56 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model categories {
+  id         Int        @id @default(autoincrement())
+  name       String     @unique(map: "categories_name_unique") @db.VarChar(255)
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at DateTime   @default(now()) @db.Timestamptz(6)
+  products   products[]
+}
+
+model knex_migrations {
+  id             Int       @id @default(autoincrement())
+  name           String?   @db.VarChar(255)
+  batch          Int?
+  migration_time DateTime? @db.Timestamptz(6)
+
+  @@ignore
+}
+
+model knex_migrations_lock {
+  index     Int  @id @default(autoincrement())
+  is_locked Int?
+
+  @@ignore
+}
+
+model products {
+  id          String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  category_id Int
+  name        String     @db.VarChar(255)
+  brand       String     @db.VarChar(255)
+  description String?
+  created_at  DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime   @default(now()) @db.Timestamptz(6)
+  categories  categories @relation(fields: [category_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "products_category_id_foreign")
+  variants    variants[]
+}
+
+model variants {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  product_id String   @db.Uuid
+  size       String   @db.VarChar(255)
+  price      Int
+  stock      Int      @default(0)
+  sku        String   @unique(map: "variants_sku_unique") @db.VarChar(255)
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  updated_at DateTime @default(now()) @db.Timestamptz(6)
+  products   products @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "variants_product_id_foreign")
+}
