@@ -14,6 +14,13 @@ class ProductDetailsRepository {
       },
     });
   }
+
+  async create(productData) {
+    // Prisma automatically returns newly created obj
+    return await this.prismaClient.products.create({
+      data: productData
+    });
+  }
 }
 
 module.exports = ProductDetailsRepository;
