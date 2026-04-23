@@ -3,17 +3,25 @@ class ProductRepository {
     this.dbPool = dbPool;
   }
 
-  async findAllWithVariants() {
-    const query = `
+  async findAllWithVariants(categoryId = null) {
+    let query = `
         SELECT 
         p.id as product_id, p.name, p.brand, p.description,
         v.id as variant_id, v.size, v.price, v.stock, v.sku
       FROM products p
       LEFT JOIN variants v ON p.id = v.product_id
-      ORDER BY p.name ASC;
         `;
 
-    const { rows } = await this.dbPool.query(query);
+    const values = [];
+    if (categoryId) {
+      // parametrized queries to prevent SQL injection
+      query += ` WHERE p.category_id = $1`;
+      values.push(categoryId);
+    }
+
+    query += ` ORDER BY p.name ASC;`;
+
+    const { rows } = await this.dbPool.query(query, values);
 
     const productsMap = new Map();
 

@@ -39,7 +39,7 @@ app.get('/api/v1/categories', async (req, res) => {
 // Products Route
 app.get('/api/v1/products', productController.getProducts);
 app.get('/api/v1/products/:id', productController.getProductDetails);
-
+app.post('/api/v1/products', productController.createProduct);
 
 // start server
 const PORT = 3001;

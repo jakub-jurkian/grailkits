@@ -4,8 +4,8 @@ class ProductService {
     this.productDetailsRepository = productDetailsRepository;
   }
 
-  async getAllProducts() {
-    return await this.productRepository.findAllWithVariants();
+  async getAllProducts(categoryId) {
+    return await this.productRepository.findAllWithVariants(categoryId);
   }
 
   async getProductById(id) {
@@ -15,6 +15,10 @@ class ProductService {
       throw new Error("PRODUCT_NOT_FOUND");
     }
     return product;
+  }
+
+  async createProduct(data) {
+    return await this.productDetailsRepository.create(data);
   }
 }
 
