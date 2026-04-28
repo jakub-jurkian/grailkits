@@ -45,6 +45,7 @@ app.get('/api/v1/categories', async (req, res) => {
 
 // Products Route
 app.get('/api/v1/products', productController.getProducts);
+app.get('/api/v1/products/count', productController.getProductCount);
 app.get('/api/v1/products/:id', productController.getProductDetails);
 app.post('/api/v1/products', productController.createProduct);
 

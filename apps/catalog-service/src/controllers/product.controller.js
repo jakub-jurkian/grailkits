@@ -5,6 +5,7 @@ class ProductController {
     // Bind the context of 'this' because Express router loses it
     this.getProducts = this.getProducts.bind(this);
     this.getProductDetails = this.getProductDetails.bind(this);
+    this.getProductCount = this.getProductCount.bind(this);
     this.createProduct = this.createProduct.bind(this);
   }
 
@@ -29,6 +30,17 @@ class ProductController {
       if (error.message === "PRODUCT_NOT_FOUND") {
         return res.status(404).json({ error: "Product not found" });
       }
+      const status = error.statusCode || 500;
+      res.status(status).json({ error: error.message });
+    }
+  }
+
+  async getProductCount(req, res) {
+    try {
+      const total = await this.productService.getProductCount();
+      res.status(200).json({ total });
+    } catch (error) {
+      console.error("[ProductController] Error counting products:", error);
       const status = error.statusCode || 500;
       res.status(status).json({ error: error.message });
     }

@@ -3,6 +3,15 @@ class ProductDetailsRepository {
     this.prismaClient = prismaClient;
   }
 
+  async countProducts() {
+    const result = await this.prismaClient.$queryRaw`
+      SELECT COUNT(*)::int AS total
+      FROM products
+    `;
+
+    return Number(result?.[0]?.total ?? 0);
+  }
+
   async findById(productId) {
     return await this.prismaClient.products.findUnique({
       where: {
