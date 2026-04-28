@@ -17,6 +17,10 @@ class ProductService {
     return product;
   }
 
+  async getProductCount() {
+    return await this.productDetailsRepository.countProducts();
+  }
+
   async createProduct(data) {
     return await this.productDetailsRepository.create(data);
   }
