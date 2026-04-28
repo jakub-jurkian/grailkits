@@ -1,0 +1,482 @@
+openapi: 3.0.3
+info:
+  title: GrailKits API
+  version: 1.0.0
+  description: |
+    GrailKits is a high-concurrency e-commerce backend for limited football kits.
+    The API Gateway exposes the public contract, while the service-specific routes
+    are documented here for completeness.
+servers:
+  - url: http://localhost:3000
+    description: API Gateway
+  - url: http://localhost:3001
+    description: Catalog Service
+  - url: http://localhost:3002
+    description: Review Service
+  - url: http://localhost:3003
+    description: Order Service
+paths:
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /api/v1/catalog/products:
+    get:
+      summary: List products
+      tags: [Catalog]
+      parameters:
+        - in: query
+          name: categoryId
+          schema:
+            type: integer
+          description: Optional category filter.
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductSummary'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a product
+      tags: [Catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateRequest'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCreated'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/products:
+    get:
+      summary: List products directly on the catalog service
+      tags: [Catalog]
+      parameters:
+        - in: query
+          name: categoryId
+          schema:
+            type: integer
+          description: Optional category filter.
+      responses:
+        '200':
+          description: Product list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ProductSummary'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    post:
+      summary: Create a product directly on the catalog service
+      tags: [Catalog]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductCreateRequest'
+      responses:
+        '201':
+          description: Product created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductCreated'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/products/{id}:
+    get:
+      summary: Get product details directly on the catalog service
+      tags: [Catalog]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Product UUID.
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/categories:
+    get:
+      summary: List categories directly on the catalog service
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        '500':
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/catalog/products/{id}:
+    get:
+      summary: Get product details
+      tags: [Catalog]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Product UUID.
+      responses:
+        '200':
+          description: Product details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductDetail'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/catalog/categories:
+    get:
+      summary: List categories
+      tags: [Catalog]
+      responses:
+        '200':
+          description: Category list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+        '500':
+          description: Database error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/orders:
+    post:
+      summary: Create an order
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+      responses:
+        '201':
+          description: Order created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+        '400':
+          description: Invalid checkout payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Checkout failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/reviews:
+    post:
+      summary: Create a review
+      tags: [Reviews]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReviewCreateRequest'
+      responses:
+        '201':
+          description: Review created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '400':
+          description: Invalid review payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/v1/reviews/product/{productId}:
+    get:
+      summary: List reviews for a product
+      tags: [Reviews]
+      parameters:
+        - in: path
+          name: productId
+          required: true
+          schema:
+            type: string
+          description: Product UUID.
+      responses:
+        '200':
+          description: Review list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Review'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required: [id, name]
+    Variant:
+      type: object
+      properties:
+        id:
+          type: string
+        size:
+          type: string
+        price:
+          type: integer
+          description: Price in the smallest currency unit.
+        stock:
+          type: integer
+        sku:
+          type: string
+      required: [id, size, price, stock, sku]
+    ProductSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        brand:
+          type: string
+        description:
+          type: string
+          nullable: true
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+      required: [id, name, brand, variants]
+    ProductDetail:
+      type: object
+      properties:
+        id:
+          type: string
+        category_id:
+          type: integer
+        name:
+          type: string
+        brand:
+          type: string
+        description:
+          type: string
+          nullable: true
+        categories:
+          $ref: '#/components/schemas/Category'
+        variants:
+          type: array
+          items:
+            $ref: '#/components/schemas/Variant'
+      required: [id, category_id, name, brand, categories, variants]
+    ProductCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        brand:
+          type: string
+        description:
+          type: string
+          nullable: true
+        category_id:
+          type: integer
+      required: [name, brand, category_id]
+    ProductCreated:
+      allOf:
+        - $ref: '#/components/schemas/ProductDetail'
+    CheckoutItem:
+      type: object
+      properties:
+        productId:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPrice:
+          type: number
+      required: [productId, quantity, unitPrice]
+    CheckoutRequest:
+      type: object
+      properties:
+        userId:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckoutItem'
+      required: [userId, items]
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        productId:
+          type: string
+        quantity:
+          type: integer
+        unitPrice:
+          type: string
+      required: [id, orderId, productId, quantity, unitPrice]
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        userId:
+          type: string
+        totalPrice:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, PAID, SHIPPED, CANCELLED]
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+      required: [id, userId, totalPrice, status, items]
+    ReviewCreateRequest:
+      type: object
+      properties:
+        productId:
+          type: string
+        userId:
+          type: string
+        rating:
+          type: integer
+          minimum: 1
+          maximum: 5
+        comment:
+          type: string
+      required: [productId, userId, rating]
+    Review:
+      type: object
+      properties:
+        _id:
+          type: string
+        productId:
+          type: string
+        userId:
+          type: string
+        rating:
+          type: integer
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [productId, userId, rating]
