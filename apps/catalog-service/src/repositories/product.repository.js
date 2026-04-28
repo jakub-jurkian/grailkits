@@ -1,3 +1,5 @@
+const { queryWithPgErrorMapping } = require('../utils/pg');
+
 class ProductRepository {
   constructor(dbPool) {
     this.dbPool = dbPool;
@@ -21,7 +23,7 @@ class ProductRepository {
 
     query += ` ORDER BY p.name ASC;`;
 
-    const { rows } = await this.dbPool.query(query, values);
+    const { rows } = await queryWithPgErrorMapping(this.dbPool, query, values);
 
     const productsMap = new Map();
 

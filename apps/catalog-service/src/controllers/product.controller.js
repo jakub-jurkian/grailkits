@@ -15,7 +15,8 @@ class ProductController {
       res.status(200).json(products);
     } catch (error) {
       console.error("[ProductController] Error fetching products:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      const status = error.statusCode || 500;
+      res.status(status).json({ error: error.message });
     }
   }
 
@@ -28,7 +29,8 @@ class ProductController {
       if (error.message === "PRODUCT_NOT_FOUND") {
         return res.status(404).json({ error: "Product not found" });
       }
-      res.status(500).json({ error: "Internal Server Error" });
+      const status = error.statusCode || 500;
+      res.status(status).json({ error: error.message });
     }
   }
 
@@ -39,7 +41,8 @@ class ProductController {
       res.status(201).json(product);
     } catch (error) {
       console.error("[ProductController] Error creating product:", error);
-      res.status(500).json({ error: "Internal Server Error" });
+      const status = error.statusCode || 500;
+      res.status(status).json({ error: error.message });
     }
   }
 }
