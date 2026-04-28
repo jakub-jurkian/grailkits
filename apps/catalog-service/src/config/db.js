@@ -3,11 +3,9 @@ const { Pool } = require("pg");
 require("dotenv").config();
 
 const pool = new Pool({
-  user: process.env.DB_USER || "root",
-  host: process.env.DB_HOST || "localhost",
-  database: process.env.DB_NAME || "grailkits_db",
-  password: process.env.DB_PASSWORD || "rootpassword",
-  port: process.env.DB_PORT || 5432,
+  connectionString:
+    process.env.DATABASE_URL ||
+    "postgres://root:rootpassword@postgres:5432/grailkits_db",
 });
 
 // Logging connection status

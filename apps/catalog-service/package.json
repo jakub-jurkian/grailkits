@@ -1,4 +1,7 @@
 {
+  "scripts": {
+    "start": "node src/app.js"
+  },
   "dependencies": {
     "@prisma/client": "^6.19.3",
     "dotenv": "^17.4.2",
@@ -8,5 +11,8 @@
   },
   "devDependencies": {
     "prisma": "^6.19.3"
+  },
+  "scripts": {
+    "start": "node src/app.js"
   }
 }

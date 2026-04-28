@@ -10,7 +10,7 @@ services:
     ports:
       - "5432:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U root -d grailkits_db"]
+      test: [ "CMD-SHELL", "pg_isready -U root -d grailkits_db" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,6 +33,80 @@ services:
       retries: 5
     volumes:
       - mongo_data:/data/db
+
+  gateway:
+    build: ./apps/gateway
+    ports: [ "3000:3000" ]
+    environment:
+      - PORT=3000
+      - CATALOG_SERVICE_URL=http://catalog-service:3001
+      - REVIEW_SERVICE_URL=http://review-service:3002
+      - ORDER_SERVICE_URL=http://order-service:3003
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      catalog-service:
+        condition: service_healthy
+      review-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3000/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  catalog-service:
+    build: ./apps/catalog-service
+    ports: [ "3001:3001" ]
+    environment:
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=root
+      - DB_PASSWORD=rootpassword
+      - DB_NAME=grailkits_db
+      - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3001/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  order-service:
+    build: ./apps/order-service
+    ports: [ "3003:3003" ]
+    environment:
+      - PORT=3003
+      - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3003/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  review-service:
+    build: ./apps/review-service
+    ports: [ "3002:3002" ]
+    environment:
+      - PORT=3002
+      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/grailkits?authSource=admin
+    depends_on:
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3002/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   mongo_data:
