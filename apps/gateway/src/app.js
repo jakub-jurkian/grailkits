@@ -8,6 +8,10 @@ const app = express();
 // Global CORS Configuration - the Gateway handles CORS for the entire system, so microservices don't strictly have to.
 app.use(cors());
 
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "API Gateway is operational" });
+});
+
 // Proxy Rules
 // Route requests to the Catalog Service
 app.use(
@@ -54,11 +58,6 @@ app.use(
     },
   }),
 );
-
-// Gateway Healthcheck (Docker)
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "API Gateway is operational" });
-});
 
 // Start the Gateway
 const PORT = process.env.PORT || 3000;

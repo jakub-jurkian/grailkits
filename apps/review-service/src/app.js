@@ -13,6 +13,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Review Service is operational' });
+});
+
 // Initialize Database Connection
 connectDB();
 
@@ -27,6 +31,11 @@ app.get(
   "/api/v1/reviews/product/:productId",
   reviewController.getProductReviews,
 );
+
+// Health Check
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "Catalog Service is operational" });
+});
 
 // Start the server
 const PORT = process.env.PORT || 3002;

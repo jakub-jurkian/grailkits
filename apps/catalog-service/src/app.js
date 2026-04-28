@@ -11,6 +11,10 @@ const ProductController = require('./controllers/product.controller');
 const app = express();
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Catalog Service is operational' });
+});
+
 
 // DI (Composition Root)
 
@@ -40,6 +44,11 @@ app.get('/api/v1/categories', async (req, res) => {
 app.get('/api/v1/products', productController.getProducts);
 app.get('/api/v1/products/:id', productController.getProductDetails);
 app.post('/api/v1/products', productController.createProduct);
+
+// Health Check
+app.get("/health", (req, res) => {
+  res.status(200).json({ status: "Catalog Service is operational" });
+});
 
 // start server
 const PORT = 3001;

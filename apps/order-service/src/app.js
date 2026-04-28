@@ -13,6 +13,10 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'Order Service is operational' });
+});
+
 const startServer = async () => {
   // connect with db
   await connectDB();
@@ -25,6 +29,11 @@ const startServer = async () => {
   const orderRepository = new OrderRepository();
   const orderService = new OrderService(orderRepository);
   const orderController = new OrderController(orderService);
+
+  // Health Check
+  app.get("/health", (req, res) => {
+    res.status(200).json({ status: "Catalog Service is operational" });
+  });
 
   app.post("/api/v1/orders", orderController.createOrder);
 

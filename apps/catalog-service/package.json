@@ -8,5 +8,8 @@
   },
   "devDependencies": {
     "prisma": "^6.19.3"
+  },
+  "scripts": {
+    "start": "node src/app.js"
   }
 }
