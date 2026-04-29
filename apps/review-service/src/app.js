@@ -31,6 +31,10 @@ app.get(
   "/api/v1/reviews/product/:productId",
   reviewController.getProductReviews,
 );
+app.get(
+  "/api/v1/reviews/analytics/avg-rating",
+  reviewController.getAvgRatingAnalytics,
+);
 
 // Health Check
 app.get("/health", (req, res) => {

@@ -11,6 +11,10 @@ class ReviewService {
   async getReviewsForProduct(productId) {
     return await this.reviewRepository.findByProductId(productId);
   }
+
+  async getAvgRatingAnalytics(productId) {
+    return await this.reviewRepository.aggregateAvgRatingPerProduct(productId);
+  }
 }
 
 module.exports = ReviewService;
