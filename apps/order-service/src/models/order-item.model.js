@@ -20,7 +20,8 @@ OrderItem.init({
   },
   skuSnapshot: {
     type: DataTypes.STRING,
-    allowNull: false
+    allowNull: false,
+    defaultValue: ''
   },
   quantity: {
     type: DataTypes.INTEGER,
