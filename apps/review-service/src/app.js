@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 
 const connectDB = require("./config/db");
+const seedReviews = require("./db/seeds/seed_reviews");
 const ReviewRepository = require("./repositories/review.repository");
 const ReviewService = require("./services/review.service");
 const ReviewController = require("./controllers/review.controller");
@@ -17,8 +18,16 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'Review Service is operational' });
 });
 
-// Initialize Database Connection
-connectDB();
+// Initialize Database Connection and seed
+const initDB = async () => {
+  await connectDB();
+  try {
+    await seedReviews();
+  } catch (err) {
+    console.error('[Review Service] Seeding failed (non-fatal):', err.message);
+  }
+};
+initDB();
 
 // Initialize DI (Java-way)
 const reviewRepository = new ReviewRepository();
