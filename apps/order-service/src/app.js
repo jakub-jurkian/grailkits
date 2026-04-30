@@ -3,6 +3,7 @@ const express = require("express");
 const cors = require("cors");
 
 const { sequelize, connectDB } = require("./config/db");
+const seedOrders = require("./db/seeds/seed_orders");
 const OrderRepository = require("./repositories/order.repository");
 const CartRepository = require("./repositories/cart.repository");
 const VariantRepository = require("./repositories/variant.repository");
@@ -21,6 +22,13 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'Order Service is operational' });
 });
 
+// Start listening immediately so the health check can pass
+// while DB sync runs in the background
+const PORT = process.env.PORT || 3003;
+app.listen(PORT, () => {
+  console.log(`[Order Service] Server is running on port ${PORT}`);
+});
+
 const startServer = async () => {
   // connect with db
   await connectDB();
@@ -28,6 +36,12 @@ const startServer = async () => {
   // sequelize autom. creates tables in psql if don't exist
   await sequelize.sync({ alter: true });
   console.log("[Order Service] Database models synchronized");
+
+  try {
+    await seedOrders();
+  } catch (err) {
+    console.error('[Order Service] Seeding failed (non-fatal):', err.message);
+  }
 
   // DI
   const orderRepository = new OrderRepository();
@@ -58,4 +72,7 @@ const startServer = async () => {
   });
 };
 
-startServer();
+startServer().catch((err) => {
+  console.error("[Order Service] Failed to initialize:", err);
+  process.exit(1);
+});
