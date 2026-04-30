@@ -9,30 +9,16 @@ class OrderRepository {
     const transaction = await sequelize.transaction();
 
     try {
-      // We pass the transaction object to ensure this operation is part of the vault
-      const order = await Order.create(orderData, { transaction });
-
-      // Prepare items by attaching the newly generated orderId to each
-      const itemsToInsert = itemsData.map((item) => ({
-        ...item,
-        orderId: order.id,
-      }));
-
-      // bulkCreate is a method to insert an array of objects at once
-      await OrderItem.bulkCreate(itemsToInsert, { transaction });
+      const order = await this.createOrderWithItemsTransaction(
+        orderData,
+        itemsData,
+        transaction,
+      );
 
       // If we reach this point, no errors occurred. CLOSE AND LOCK THE VAULT (Save permanently).
       await transaction.commit();
 
-      // Fetch and return the complete saved order including nested items
-      return await Order.findByPk(order.id, {
-        include: [
-          {
-            model: OrderItem,
-            as: "items",
-          },
-        ],
-      });
+      return order;
     } catch (error) {
       // Something failed. The database will discard EVERYTHING in this transaction.
       await transaction.rollback();
@@ -42,6 +28,31 @@ class OrderRepository {
       );
       throw error;
     }
+  }
+
+  async createOrderWithItemsTransaction(orderData, itemsData, transaction) {
+    // We pass the transaction object to ensure this operation is part of the vault
+    const order = await Order.create(orderData, { transaction });
+
+    // Prepare items by attaching the newly generated orderId to each
+    const itemsToInsert = itemsData.map((item) => ({
+      ...item,
+      orderId: order.id,
+    }));
+
+    // bulkCreate is a method to insert an array of objects at once
+    await OrderItem.bulkCreate(itemsToInsert, { transaction });
+
+    // Fetch and return the complete saved order including nested items
+    return await Order.findByPk(order.id, {
+      include: [
+        {
+          model: OrderItem,
+          as: "items",
+        },
+      ],
+      transaction,
+    });
   }
 }
 
