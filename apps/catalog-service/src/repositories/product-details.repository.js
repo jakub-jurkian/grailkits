@@ -30,6 +30,13 @@ class ProductDetailsRepository {
       data: productData
     });
   }
+
+  // Used for compensation rollback when the subsequent Mongo write fails
+  async deleteById(productId) {
+    await this.prismaClient.products.delete({
+      where: { id: productId },
+    });
+  }
 }
 
 module.exports = ProductDetailsRepository;
