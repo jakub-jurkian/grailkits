@@ -11,8 +11,19 @@ class ProductController {
 
   async getProducts(req, res) {
     try {
-      const { categoryId } = req.query;
-      const products = await this.productService.getAllProducts(categoryId);
+      const { categoryId, minPrice, maxPrice, available } = req.query;
+      
+      // Parse numeric parameters
+      const parsedMinPrice = minPrice ? parseFloat(minPrice) : null;
+      const parsedMaxPrice = maxPrice ? parseFloat(maxPrice) : null;
+      const inStock = available ? available === "true" : true;
+      
+      const products = await this.productService.getAllProducts(
+        categoryId || null,
+        parsedMinPrice,
+        parsedMaxPrice,
+        inStock
+      );
       res.status(200).json(products);
     } catch (error) {
       console.error("[ProductController] Error fetching products:", error);

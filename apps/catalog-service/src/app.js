@@ -1,4 +1,7 @@
 const express = require("express");
+const knex = require("knex")(
+  require("../knexfile")[process.env.NODE_ENV || "development"]
+);
 const pool = require("./config/db");
 const prisma = require('./config/prisma');
 
@@ -11,51 +14,54 @@ const ProductController = require('./controllers/product.controller');
 const app = express();
 app.use(express.json());
 
+// Health endpoint registered first so it responds immediately during startup
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'Catalog Service is operational' });
 });
 
-
-// DI (Composition Root)
-
-// Categories (Old PoC way)
-const categoryRepo = new CategoryRepository(pool);
-
-// Products (Proper 3-Tier Architecture)
-const productRepo = new ProductRepository(pool);
-const productDetailsRepo = new ProductDetailsRepository(prisma);
-const productService = new ProductService(productRepo, productDetailsRepo);
-const productController = new ProductController(productService);
-
-
-// Routes
-
-// Categories Route (To be refactored later)
-app.get('/api/v1/categories', async (req, res) => {
-  try {
-    const categories = await categoryRepo.findAll();
-    res.json(categories);
-  } catch (error) {
-    if (error.statusCode) {
-      return res.status(error.statusCode).json({ error: error.message });
-    }
-    res.status(500).json({ error: 'Database error' });
-  }
-});
-
-// Products Route
-app.get('/api/v1/products', productController.getProducts);
-app.get('/api/v1/products/count', productController.getProductCount);
-app.get('/api/v1/products/:id', productController.getProductDetails);
-app.post('/api/v1/products', productController.createProduct);
-
-// Health Check
-app.get("/health", (req, res) => {
-  res.status(200).json({ status: "Catalog Service is operational" });
-});
-
-// start server
-const PORT = 3001;
+// Start listening before async init so the health check passes right away
+const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
-  console.log(`Catalog Service running on port ${PORT}`);
+  console.log(`[Catalog Service] Server is running on port ${PORT}`);
+});
+
+const startServer = async () => {
+  // Run Knex migrations so tables exist before any request hits them
+  await knex.migrate.latest();
+  console.log('[Catalog Service] Migrations applied');
+
+  // Seed initial data (idempotent — seeds clear and re-insert)
+  await knex.seed.run();
+  console.log('[Catalog Service] Seeds applied');
+
+  // DI (Composition Root)
+  const categoryRepo = new CategoryRepository(pool);
+  const productRepo = new ProductRepository(pool);
+  const productDetailsRepo = new ProductDetailsRepository(prisma);
+  const productService = new ProductService(productRepo, productDetailsRepo);
+  const productController = new ProductController(productService);
+
+  // Categories Route
+  app.get('/api/v1/categories', async (req, res) => {
+    try {
+      const categories = await categoryRepo.findAll();
+      res.json(categories);
+    } catch (error) {
+      if (error.statusCode) {
+        return res.status(error.statusCode).json({ error: error.message });
+      }
+      res.status(500).json({ error: 'Database error' });
+    }
+  });
+
+  // Products Routes
+  app.get('/api/v1/products', productController.getProducts);
+  app.get('/api/v1/products/count', productController.getProductCount);
+  app.get('/api/v1/products/:id', productController.getProductDetails);
+  app.post('/api/v1/products', productController.createProduct);
+};
+
+startServer().catch((err) => {
+  console.error('[Catalog Service] Failed to initialize:', err);
+  process.exit(1);
 });

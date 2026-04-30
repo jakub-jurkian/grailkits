@@ -4,8 +4,8 @@ class ProductService {
     this.productDetailsRepository = productDetailsRepository;
   }
 
-  async getAllProducts(categoryId) {
-    return await this.productRepository.findAllWithVariants(categoryId);
+  async getAllProducts(categoryId, minPrice = null, maxPrice = null, inStock = true) {
+    return await this.productRepository.findAllWithVariants(categoryId, minPrice, maxPrice, inStock);
   }
 
   async getProductById(id) {
