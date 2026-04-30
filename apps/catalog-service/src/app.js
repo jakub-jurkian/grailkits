@@ -8,8 +8,10 @@ const prisma = require('./config/prisma');
 const CategoryRepository = require("./repositories/category.repository");
 const ProductRepository = require('./repositories/product.repository');
 const ProductDetailsRepository = require('./repositories/product-details.repository');
+const ProductDetailRepository = require('./repositories/product-detail.repository');
 const ProductService = require('./services/product.service');
 const ProductController = require('./controllers/product.controller');
+const { connectMongo } = require("./config/mongo");
 
 const app = express();
 app.use(express.json());
@@ -34,11 +36,14 @@ const startServer = async () => {
   await knex.seed.run();
   console.log('[Catalog Service] Seeds applied');
 
+  await connectMongo();
+
   // DI (Composition Root)
   const categoryRepo = new CategoryRepository(pool);
   const productRepo = new ProductRepository(pool);
   const productDetailsRepo = new ProductDetailsRepository(prisma);
-  const productService = new ProductService(productRepo, productDetailsRepo);
+  const productDetailMongoRepo = new ProductDetailRepository();
+  const productService = new ProductService(productRepo, productDetailsRepo, productDetailMongoRepo);
   const productController = new ProductController(productService);
 
   // Categories Route

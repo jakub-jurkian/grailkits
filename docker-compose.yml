@@ -69,8 +69,11 @@ services:
       - DB_PASSWORD=rootpassword
       - DB_NAME=grailkits_db
       - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
+      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/grailkits?authSource=admin
     depends_on:
       postgres:
+        condition: service_healthy
+      mongo:
         condition: service_healthy
     healthcheck:
       test: [ "CMD-SHELL", "wget -qO- http://localhost:3001/health >/dev/null 2>&1 || exit 1" ]
