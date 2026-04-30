@@ -20,11 +20,13 @@ app.use(
     target: process.env.CATALOG_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => {
-      // Preserve the downstream API prefix; default catalog root to product listing.
-      if (path === "/" || path === "") {
-        return "/api/v1/products";
+      const [pathname, qs] = path.split("?");
+      const query = qs ? `?${qs}` : "";
+
+      if (pathname === "/" || pathname === "") {
+        return `/api/v1/products${query}`;
       }
-      return `/api/v1${path}`;
+      return `/api/v1${pathname}${query}`;
     },
   }),
 );
@@ -36,28 +38,35 @@ app.use(
     target: process.env.REVIEW_SERVICE_URL,
     changeOrigin: true,
     pathRewrite: (path) => {
-      if (path === "/" || path === "") {
-        return "/api/v1/reviews";
+      const [pathname, qs] = path.split("?");
+      const query = qs ? `?${qs}` : "";
+
+      if (pathname === "/" || pathname === "") {
+        return `/api/v1/reviews${query}`;
       }
-      return `/api/v1/reviews${path}`;
+      return `/api/v1/reviews${pathname}${query}`;
     },
   }),
 );
 
-// Route requests to the Order Service
-app.use(
-  "/api/v1/orders",
-  createProxyMiddleware({
-    target: process.env.ORDER_SERVICE_URL,
-    changeOrigin: true,
-    pathRewrite: (path) => {
-      if (path === "/" || path === "") {
-        return "/api/v1/orders";
-      }
-      return `/api/v1/orders${path}`;
-    },
-  }),
-);
+// Route requests to the Order Service — orders, cart, and checkout
+const orderProxy = createProxyMiddleware({
+  target: process.env.ORDER_SERVICE_URL,
+  changeOrigin: true,
+  pathRewrite: (path) => {
+    const [pathname, qs] = path.split("?");
+    const query = qs ? `?${qs}` : "";
+
+    if (pathname === "/" || pathname === "") {
+      return `/api/v1/orders${query}`;
+    }
+    return `/api/v1${pathname}${query}`;
+  },
+});
+
+app.use("/api/v1/orders", orderProxy);
+app.use("/api/v1/cart", orderProxy);
+app.use("/api/v1/checkout", orderProxy);
 
 // Start the Gateway
 const PORT = process.env.PORT || 3000;
