@@ -1,30 +1,59 @@
-const { queryWithPgErrorMapping } = require('../utils/pg');
+const { queryWithPgErrorMapping } = require("../utils/pg");
+const knex = require("knex")(
+  require("../../knexfile")[process.env.NODE_ENV || "development"],
+);
 
 class ProductRepository {
   constructor(dbPool) {
     this.dbPool = dbPool;
   }
 
-  async findAllWithVariants(categoryId = null) {
-    let query = `
-        SELECT 
-        p.id as product_id, p.name, p.brand, p.description,
-        v.id as variant_id, v.size, v.price, v.stock, v.sku
-      FROM products p
-      LEFT JOIN variants v ON p.id = v.product_id
-        `;
+  async findAllWithVariants(
+    categoryId = null,
+    minPrice = null,
+    maxPrice = null,
+    inStock = true,
+  ) {
+    // Build Knex query with explicit column selection and aliasing
+    let query = knex("products")
+      .select(
+        "products.id as product_id",
+        "products.name",
+        "products.brand",
+        "products.description",
+        "variants.id as variant_id",
+        "variants.size",
+        "variants.price",
+        "variants.stock",
+        "variants.sku",
+      )
+      .leftJoin("variants", "products.id", "variants.product_id");
 
-    const values = [];
+    // Apply filters only if provided
     if (categoryId) {
-      // parametrized queries to prevent SQL injection
-      query += ` WHERE p.category_id = $1`;
-      values.push(categoryId);
+      query = query.where("products.category_id", categoryId);
     }
 
-    query += ` ORDER BY p.name ASC;`;
+    if (minPrice !== null && maxPrice !== null) {
+      query = query.whereBetween("variants.price", [minPrice, maxPrice]);
+    }
 
-    const { rows } = await queryWithPgErrorMapping(this.dbPool, query, values);
+    // Only show items in stock (default behavior)
+    if (inStock) {
+      query = query.andWhere("variants.stock", ">", 0);
+    }
 
+    // Order by product name
+    query = query.orderBy("products.name", "asc");
+
+    // toNative() converts Knex's generic ? placeholders to PostgreSQL's $1,$2,...
+    // toSQL() alone returns ? style which pg misparses as the JSONB operator
+    const { sql, bindings } = query.toSQL().toNative();
+
+    // Execute with error mapping (T1: PostgreSQL error codes to HTTP)
+    const { rows } = await queryWithPgErrorMapping(this.dbPool, sql, bindings);
+
+    // Transform rows into products with nested variants
     const productsMap = new Map();
 
     rows.forEach((row) => {
