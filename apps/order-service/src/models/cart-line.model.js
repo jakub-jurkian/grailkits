@@ -1,16 +1,15 @@
 const { DataTypes, Model } = require('sequelize');
 const { sequelize } = require('../config/db');
 
-class OrderItem extends Model {}
+class CartLine extends Model {}
 
-OrderItem.init({
+CartLine.init({
   id: {
     type: DataTypes.UUID,
     defaultValue: DataTypes.UUIDV4,
     primaryKey: true
   },
-  // pk will be added autom by relation, but I defined it for the clarity
-  orderId: {
+  cartId: {
     type: DataTypes.UUID,
     allowNull: false
   },
@@ -18,7 +17,7 @@ OrderItem.init({
     type: DataTypes.STRING,
     allowNull: false
   },
-  skuSnapshot: {
+  variantId: {
     type: DataTypes.STRING,
     allowNull: false
   },
@@ -29,19 +28,12 @@ OrderItem.init({
     validate: {
       min: 1
     }
-  },
-  unitPrice: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-    validate: {
-      min: 0
-    }
   }
 }, {
   sequelize,
-  modelName: 'OrderItem',
-  tableName: 'order_items',
-  timestamps: false
+  modelName: 'CartLine',
+  tableName: 'cart_lines',
+  timestamps: true
 });
 
-module.exports = OrderItem;
+module.exports = CartLine;
