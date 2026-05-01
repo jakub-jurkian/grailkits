@@ -25,9 +25,14 @@ class ProductDetailsRepository {
   }
 
   async create(productData) {
-    // Prisma automatically returns newly created obj
+    const { categoryId, ...rest } = productData;
     return await this.prismaClient.products.create({
-      data: productData
+      data: {
+        ...rest,
+        categories: {
+          connect: { id: categoryId },
+        },
+      },
     });
   }
 
