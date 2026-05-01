@@ -74,6 +74,13 @@ reviewSchema.virtual('productDetails', {
   justOne: true,
 });
 
+// T6: statics — class-level method to fetch only approved reviews for a product
+reviewSchema.statics.getApproved = function (productId) {
+  const filter = { status: 'APPROVED' };
+  if (productId) filter.productId = productId;
+  return this.find(filter).sort({ createdAt: -1 }).populate('productDetails');
+};
+
 // Pre-save hook: append an entry to moderationHistory when status changes (including initial save)
 reviewSchema.pre('save', function(next) {
   try {

@@ -13,11 +13,12 @@ class ReviewRepository {
       .populate('productDetails');  // T6: populate virtual with ProductDetail document
   }
 
-  async aggregateAvgRatingPerProduct(productId) {
-    const matchStage = {
-      status: 'APPROVED',
-    };
+  async getApprovedReviews(productId) {
+    return await Review.getApproved(productId);
+  }
 
+  async aggregateAvgRatingPerProduct(productId) {
+    const matchStage = { status: 'APPROVED' };
     if (productId) {
       matchStage.productId = productId;
     }
