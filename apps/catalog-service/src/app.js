@@ -12,6 +12,7 @@ const ProductDetailRepository = require('./repositories/product-detail.repositor
 const ProductService = require('./services/product.service');
 const ProductController = require('./controllers/product.controller');
 const { connectMongo } = require("./config/mongo");
+const seedProductDetails = require('./db/seed_product_details');
 
 const app = express();
 app.use(express.json());
@@ -37,6 +38,12 @@ const startServer = async () => {
   console.log('[Catalog Service] Seeds applied');
 
   await connectMongo();
+
+  try {
+    await seedProductDetails();
+  } catch (err) {
+    console.error('[Catalog Service] MongoDB seeding failed (non-fatal):', err.message);
+  }
 
   // DI (Composition Root)
   const categoryRepo = new CategoryRepository(pool);
