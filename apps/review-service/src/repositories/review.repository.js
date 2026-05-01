@@ -7,7 +7,10 @@ class ReviewRepository {
   }
 
   async findByProductId(productId) {
-    return await Review.find({ productId }).sort({ createdAt: -1 }); // searching by the latest
+    return await Review
+      .find({ productId })
+      .sort({ createdAt: -1 })
+      .populate('productDetails');  // T6: populate virtual with ProductDetail document
   }
 
   async aggregateAvgRatingPerProduct(productId) {
