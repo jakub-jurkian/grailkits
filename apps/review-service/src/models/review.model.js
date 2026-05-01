@@ -1,5 +1,8 @@
 const mongoose = require('mongoose');
 
+// Importing ProductDetail registers the model in Mongoose so virtual populate works
+require('./product-detail.model');
+
 const reviewSchema = new mongoose.Schema({
   productId: { 
     type: String, 
@@ -53,12 +56,23 @@ const reviewSchema = new mongoose.Schema({
     reason: { type: String, trim: true, maxlength: 500 },
     createdAt: { type: Date, default: Date.now }
   }]
-}, { 
-  timestamps: true
+}, {
+  timestamps: true,
+  toJSON: { virtuals: true },
+  toObject: { virtuals: true },
 });
 
 // Compound index to speed up recent reviews per product and aggregation by rating
 reviewSchema.index({ productId: 1, createdAt: -1 });
+
+// Virtual populate: enriches reviews with ProductDetail document from the same collection
+// Uses localField/foreignField because productId is a string UUID, not an ObjectId ref
+reviewSchema.virtual('productDetails', {
+  ref: 'ProductDetail',
+  localField: 'productId',
+  foreignField: 'productId',
+  justOne: true,
+});
 
 // Pre-save hook: append an entry to moderationHistory when status changes (including initial save)
 reviewSchema.pre('save', function(next) {
