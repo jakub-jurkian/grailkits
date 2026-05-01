@@ -6,6 +6,7 @@ class ReviewController {
     this.createReview = this.createReview.bind(this);
     this.getProductReviews = this.getProductReviews.bind(this);
     this.getAvgRatingAnalytics = this.getAvgRatingAnalytics.bind(this);
+    this.getApprovedReviews = this.getApprovedReviews.bind(this);
   }
 
   async createReview(req, res) {
@@ -25,6 +26,17 @@ class ReviewController {
       res.status(200).json(reviews);
     } catch (error) {
       console.error('[ReviewController] Error fetching reviews:', error);
+      res.status(500).json({ error: 'Internal Server Error' });
+    }
+  }
+
+  async getApprovedReviews(req, res) {
+    try {
+      const { productId } = req.query;
+      const reviews = await this.reviewService.getApprovedReviews(productId);
+      res.status(200).json(reviews);
+    } catch (error) {
+      console.error('[ReviewController] Error fetching approved reviews:', error);
       res.status(500).json({ error: 'Internal Server Error' });
     }
   }
