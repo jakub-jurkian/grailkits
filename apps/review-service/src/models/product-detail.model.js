@@ -44,6 +44,7 @@ const productDetailSchema = new mongoose.Schema({
   },
 }, {
   timestamps: true,
+  collection: 'product_details', // match the collection name used by catalog-service native driver
 });
 
 module.exports = mongoose.model('ProductDetail', productDetailSchema);
