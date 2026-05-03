@@ -16,7 +16,15 @@ const sharedConfig = {
   },
 };
 
+const testConfig = {
+  client: 'pg',
+  connection: 'postgres://root:rootpassword@localhost:5432/grailkits_test',
+  migrations: { directory: './src/db/migrations' },
+  seeds: { directory: './src/db/seeds' },
+};
+
 module.exports = {
   development: sharedConfig,
   production: sharedConfig,
+  test: testConfig,
 };
