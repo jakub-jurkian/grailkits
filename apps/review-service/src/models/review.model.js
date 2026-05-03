@@ -82,21 +82,17 @@ reviewSchema.statics.getApproved = function (productId) {
 };
 
 // Pre-save hook: append an entry to moderationHistory when status changes (including initial save)
-reviewSchema.pre('save', function(next) {
-  try {
-    if (this.isNew || this.isModified('status')) {
-      this.moderationHistory = this.moderationHistory || [];
-      const last = this.moderationHistory.length
-        ? this.moderationHistory[this.moderationHistory.length - 1].status
-        : null;
+// Using async style (Mongoose 9 preferred) — no next() callback needed
+reviewSchema.pre('save', async function() {
+  if (this.isNew || this.isModified('status')) {
+    this.moderationHistory = this.moderationHistory || [];
+    const last = this.moderationHistory.length
+      ? this.moderationHistory[this.moderationHistory.length - 1].status
+      : null;
 
-      if (last !== this.status) {
-        this.moderationHistory.push({ status: this.status, createdAt: new Date() });
-      }
+    if (last !== this.status) {
+      this.moderationHistory.push({ status: this.status, createdAt: new Date() });
     }
-    next();
-  } catch (err) {
-    next(err);
   }
 });
 
