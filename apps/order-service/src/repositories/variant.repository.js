@@ -38,6 +38,17 @@ class VariantRepository {
       }
     );
   }
+
+  async incrementStock(variantId, quantity, transaction) {
+    await sequelize.query(
+      "UPDATE variants SET stock = stock + :quantity WHERE id = :variantId",
+      {
+        replacements: { variantId, quantity },
+        type: QueryTypes.UPDATE,
+        transaction,
+      }
+    );
+  }
 }
 
 module.exports = VariantRepository;
