@@ -1,6 +1,6 @@
 const request = require('supertest');
 const { setupMongo, clearCollections, teardownMongo } = require('./setup');
-const createTestApp = require('./testApp');
+const { createTestApp, createMockProductStatsRepo } = require('./testApp');
 
 const app = createTestApp();
 
@@ -269,5 +269,74 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.code).toBe('BAD_REQUEST');
+  });
+});
+
+// ─── Hybrid write-back: approve → PostgreSQL stats update ────────────────────
+
+describe('PATCH /api/v1/reviews/:id/moderate — hybrid PG write-back', () => {
+  const PENDING_REVIEW = {
+    productId: 'a0000000-0000-0000-0000-000000000099',
+    userId: 'user-001',
+    rating: 4,
+    title: 'Hybrid test review',
+    body: 'Testing hybrid write-back to PostgreSQL.',
+    status: 'PENDING',
+  };
+
+  it('calls productStatsRepository.updateReviewStats with correct productId and stats on approval', async () => {
+    const statsRepo = createMockProductStatsRepo();
+    const hybridApp = createTestApp({ productStatsRepo: statsRepo });
+
+    const created = await request(hybridApp).post('/api/v1/reviews').send(PENDING_REVIEW);
+    expect(created.status).toBe(201);
+    const reviewId = created.body._id;
+
+    const res = await request(hybridApp)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001' });
+
+    expect(res.status).toBe(200);
+    expect(statsRepo.calls).toHaveLength(1);
+    expect(statsRepo.calls[0].productId).toBe(PENDING_REVIEW.productId);
+    expect(typeof statsRepo.calls[0].reviewCount).toBe('number');
+    expect(statsRepo.calls[0].reviewCount).toBeGreaterThan(0);
+  });
+
+  it('does NOT call productStatsRepository on REJECTED moderation', async () => {
+    const statsRepo = createMockProductStatsRepo();
+    const hybridApp = createTestApp({ productStatsRepo: statsRepo });
+
+    const created = await request(hybridApp).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    const res = await request(hybridApp)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'REJECTED' });
+
+    expect(res.status).toBe(200);
+    expect(statsRepo.calls).toHaveLength(0);
+  });
+
+  it('reverts MongoDB status to PENDING and returns 503 when PG write-back fails', async () => {
+    const failingStatsRepo = createMockProductStatsRepo({ shouldFail: true });
+    const hybridApp = createTestApp({ productStatsRepo: failingStatsRepo });
+
+    const created = await request(hybridApp).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    const res = await request(hybridApp)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('INTERNAL_ERROR');
+
+    // Verify MongoDB document was compensated back to PENDING
+    const listRes = await request(hybridApp)
+      .get(`/api/v1/reviews/product/${PENDING_REVIEW.productId}`);
+    expect(listRes.status).toBe(200);
+    const review = listRes.body.find((r) => r._id === reviewId);
+    expect(review.status).toBe('PENDING');
   });
 });

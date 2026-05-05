@@ -5,12 +5,25 @@ const ReviewRepository = require('../repositories/review.repository');
 const ReviewService = require('../services/review.service');
 const ReviewController = require('../controllers/review.controller');
 
-function createTestApp() {
+// In-memory mock for ProductStatsRepository.
+// Captures calls so tests can assert on what was written to "PG".
+function createMockProductStatsRepo({ shouldFail = false } = {}) {
+  const calls = [];
+  return {
+    calls,
+    async updateReviewStats(productId, stats) {
+      if (shouldFail) throw new Error('PG connection refused (simulated)');
+      calls.push({ productId, ...stats });
+    },
+  };
+}
+
+function createTestApp({ productStatsRepo } = {}) {
   const app = express();
   app.use(express.json());
 
   const reviewRepository = new ReviewRepository();
-  const reviewService = new ReviewService(reviewRepository);
+  const reviewService = new ReviewService(reviewRepository, productStatsRepo || null);
   const reviewController = new ReviewController(reviewService);
 
   app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
@@ -23,4 +36,4 @@ function createTestApp() {
   return app;
 }
 
-module.exports = createTestApp;
+module.exports = { createTestApp, createMockProductStatsRepo };
