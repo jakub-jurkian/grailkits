@@ -257,7 +257,7 @@ describe('beforeCreate domain hook — totalPrice guard', () => {
     const app = makeApp();
     const res = await request(app)
       .post('/api/v1/orders')
-      .send({ userId: 'user-hook-test', items: [{ variantId: 'variant-001', quantity: 1, unitPrice: 99.999 }] });
+      .send({ userId: 'user-hook-test', items: [{ productId: 'product-001', variantId: 'variant-001', quantity: 1, unitPrice: 99.999 }] });
 
     expect(res.status).toBe(201);
     expect(Number(res.body.totalPrice)).toBe(100.00);
