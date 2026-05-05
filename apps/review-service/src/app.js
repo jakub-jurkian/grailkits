@@ -48,6 +48,10 @@ app.get(
   "/api/v1/reviews/approved",
   reviewController.getApprovedReviews,
 );
+app.patch(
+  "/api/v1/reviews/:id/moderate",
+  reviewController.moderateReview,
+);
 
 // Health Check
 app.get("/health", (req, res) => {

@@ -81,9 +81,12 @@ reviewSchema.statics.getApproved = function (productId) {
   return this.find(filter).sort({ createdAt: -1 }).populate('productDetails');
 };
 
-// Pre-save hook: append an entry to moderationHistory when status changes (including initial save)
-// Using async style (Mongoose 9 preferred) — no next() callback needed
+// Pre-save hook: append an entry to moderationHistory when status changes (including initial save).
+// Skipped when the repository's moderateReview() already pushed a richer entry
+// (with moderatorId + reason) to avoid duplicates.
 reviewSchema.pre('save', async function() {
+  if (this._skipModerationHistoryPush) return;
+
   if (this.isNew || this.isModified('status')) {
     this.moderationHistory = this.moderationHistory || [];
     const last = this.moderationHistory.length
