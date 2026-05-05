@@ -7,6 +7,7 @@ class ReviewController {
     this.getProductReviews = this.getProductReviews.bind(this);
     this.getAvgRatingAnalytics = this.getAvgRatingAnalytics.bind(this);
     this.getApprovedReviews = this.getApprovedReviews.bind(this);
+    this.moderateReview = this.moderateReview.bind(this);
   }
 
   async createReview(req, res) {
@@ -49,6 +50,24 @@ class ReviewController {
       res.status(200).json(analytics);
     } catch (error) {
       console.error('[ReviewController] Error fetching rating analytics:', error);
+      errorResponse(res, error);
+    }
+  }
+
+  async moderateReview(req, res) {
+    try {
+      const { id } = req.params;
+      const { status, moderatorId, reason } = req.body;
+
+      if (!status) {
+        const err = Object.assign(new Error('Missing required field: status'), { statusCode: 400 });
+        return errorResponse(res, err);
+      }
+
+      const review = await this.reviewService.moderateReview(id, { status, moderatorId, reason });
+      res.status(200).json(review);
+    } catch (error) {
+      console.error('[ReviewController] Error moderating review:', error);
       errorResponse(res, error);
     }
   }
