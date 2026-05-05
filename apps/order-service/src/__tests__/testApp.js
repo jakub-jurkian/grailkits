@@ -6,7 +6,9 @@ const express = require('express');
 const CartRepository = require('../repositories/cart.repository');
 const OrderRepository = require('../repositories/order.repository');
 const CartService = require('../services/cart.service');
+const OrderService = require('../services/order.service');
 const CartController = require('../controllers/cart.controller');
+const OrderController = require('../controllers/order.controller');
 
 /**
  * Build an in-memory VariantRepository that never touches the DB.
@@ -31,6 +33,11 @@ function createMockVariantRepo(variantMap = {}) {
         store[variantId].stock -= quantity;
       }
     },
+    async incrementStock(variantId, quantity) {
+      if (store[variantId]) {
+        store[variantId].stock += quantity;
+      }
+    },
   };
 }
 
@@ -49,9 +56,18 @@ function createTestApp(variantMap = {}, overrideVariantRepo = null) {
   const orderRepo = new OrderRepository();
   const variantRepo = overrideVariantRepo || createMockVariantRepo(variantMap);
 
+  const orderService = new OrderService(orderRepo, variantRepo);
   const cartService = new CartService(cartRepo, variantRepo, orderRepo);
+
+  const orderController = new OrderController(orderService);
   const cartController = new CartController(cartService);
 
+  // Order routes
+  app.get('/api/v1/orders', orderController.getOrders);
+  app.get('/api/v1/orders/:id', orderController.getOrderById);
+  app.post('/api/v1/orders/:id/cancel', orderController.cancelOrder);
+
+  // Cart routes
   app.post('/api/v1/cart/lines', cartController.addLine);
   app.get('/api/v1/cart', cartController.getCart);
   app.post('/api/v1/checkout', cartController.checkout);
