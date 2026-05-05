@@ -24,5 +24,7 @@ COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
 
-# Run Prisma migrations then start the app
-CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]
+# Both Prisma migrations are baselined (schema is owned by Knex, which runs
+# inside npm start via knex.migrate.latest()). Semicolons ignore exit codes
+# so re-runs don't fail when the migrations are already tracked.
+CMD ["sh", "-c", "npx prisma migrate resolve --applied 20240101000000_init 2>/dev/null; npx prisma migrate resolve --applied 20240102000000_add_review_stats_to_products 2>/dev/null; npx prisma migrate deploy && npm start"]
