@@ -19,7 +19,10 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/knexfile.js ./knexfile.js
+# Prisma schema + migration files needed for migrate deploy at runtime
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
 
-CMD ["npm", "start"]
+# Run Prisma migrations then start the app
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

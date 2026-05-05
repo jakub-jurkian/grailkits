@@ -14,6 +14,9 @@
   },
   "scripts": {
     "start": "node src/app.js",
+    "migrate": "prisma migrate deploy",
+    "migrate:dev": "prisma migrate dev",
+    "db:generate": "prisma generate",
     "test": "jest --runInBand --forceExit"
   },
   "jest": {
