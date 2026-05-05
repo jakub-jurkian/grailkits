@@ -133,6 +133,7 @@ class CartService {
 
         orderItems.push({
           productId: variant.product_id,
+          variantId: variant.id,
           skuSnapshot: variant.sku,
           quantity: line.quantity,
           unitPrice: Number(variant.price),

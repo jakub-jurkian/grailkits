@@ -47,7 +47,7 @@ const startServer = async () => {
   const orderRepository = new OrderRepository();
   const cartRepository = new CartRepository();
   const variantRepository = new VariantRepository();
-  const orderService = new OrderService(orderRepository);
+  const orderService = new OrderService(orderRepository, variantRepository);
   const cartService = new CartService(
     cartRepository,
     variantRepository,
@@ -61,7 +61,13 @@ const startServer = async () => {
     res.status(200).json({ status: "Catalog Service is operational" });
   });
 
+  // Order routes
+  app.get("/api/v1/orders", orderController.getOrders);
+  app.get("/api/v1/orders/:id", orderController.getOrderById);
+  app.post("/api/v1/orders/:id/cancel", orderController.cancelOrder);
   app.post("/api/v1/orders", orderController.createOrder);
+
+  // Cart routes
   app.post("/api/v1/cart/lines", cartController.addLine);
   app.get("/api/v1/cart", cartController.getCart);
   app.post("/api/v1/checkout", cartController.checkout);
