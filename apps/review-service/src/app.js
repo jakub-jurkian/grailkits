@@ -5,6 +5,7 @@ const cors = require("cors");
 const connectDB = require("./config/db");
 const seedReviews = require("./db/seeds/seed_reviews");
 const ReviewRepository = require("./repositories/review.repository");
+const ProductStatsRepository = require("./repositories/product-stats.repository");
 const ReviewService = require("./services/review.service");
 const ReviewController = require("./controllers/review.controller");
 
@@ -31,7 +32,11 @@ initDB();
 
 // Initialize DI (Java-way)
 const reviewRepository = new ReviewRepository();
-const reviewService = new ReviewService(reviewRepository);
+// Wire PG stats repo only when DATABASE_URL is present (skipped in test env)
+const productStatsRepository = process.env.DATABASE_URL
+  ? new ProductStatsRepository()
+  : null;
+const reviewService = new ReviewService(reviewRepository, productStatsRepository);
 const reviewController = new ReviewController(reviewService);
 
 // Routes

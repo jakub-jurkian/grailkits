@@ -1,8 +1,10 @@
 const VALID_STATUSES = ['APPROVED', 'REJECTED'];
 
 class ReviewService {
-  constructor(reviewRepository) {
+  // productStatsRepository is optional — omit in tests or when DATABASE_URL is absent.
+  constructor(reviewRepository, productStatsRepository = null) {
     this.reviewRepository = reviewRepository;
+    this.productStatsRepository = productStatsRepository;
   }
 
   async addReview(data) {
@@ -41,7 +43,45 @@ class ReviewService {
       throw err;
     }
 
-    return await this.reviewRepository.moderateReview(reviewId, { status, moderatorId, reason });
+    // Step 1 — persist the new status in MongoDB
+    const updatedReview = await this.reviewRepository.moderateReview(
+      reviewId,
+      { status, moderatorId, reason }
+    );
+
+    // Step 2 — if approved and a PG stats repo is wired, update the products table.
+    // On failure we compensate by reverting the MongoDB document back to PENDING.
+    if (status === 'APPROVED' && this.productStatsRepository) {
+      try {
+        const stats = await this._computeApprovedStats(review.productId);
+        await this.productStatsRepository.updateReviewStats(review.productId, stats);
+      } catch (pgError) {
+        // Compensation: revert MongoDB status to PENDING so the two stores stay consistent
+        console.error('[ReviewService] PG write-back failed — reverting MongoDB status:', pgError.message);
+        await this.reviewRepository.moderateReview(reviewId, {
+          status: 'PENDING',
+          moderatorId: 'system',
+          reason: `Compensation: PG write-back failed — ${pgError.message}`,
+        });
+
+        const err = new Error('Review approval failed: could not update product statistics');
+        err.statusCode = 503;
+        err.details = pgError.message;
+        throw err;
+      }
+    }
+
+    return updatedReview;
+  }
+
+  // Recalculates avg_rating and review_count for a product using approved reviews in MongoDB.
+  async _computeApprovedStats(productId) {
+    const results = await this.reviewRepository.aggregateAvgRatingPerProduct(productId);
+    const stats = results.find((r) => r.productId === productId);
+    return {
+      avgRating: stats ? stats.avgRating : null,
+      reviewCount: stats ? stats.reviewCount : 0,
+    };
   }
 }
 
