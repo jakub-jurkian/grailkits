@@ -56,11 +56,6 @@ const startServer = async () => {
   const orderController = new OrderController(orderService);
   const cartController = new CartController(cartService);
 
-  // Health Check
-  app.get("/health", (req, res) => {
-    res.status(200).json({ status: "Catalog Service is operational" });
-  });
-
   // Order routes
   app.get("/api/v1/orders", orderController.getOrders);
   app.get("/api/v1/orders/:id", orderController.getOrderById);
@@ -71,11 +66,6 @@ const startServer = async () => {
   app.post("/api/v1/cart/lines", cartController.addLine);
   app.get("/api/v1/cart", cartController.getCart);
   app.post("/api/v1/checkout", cartController.checkout);
-
-  const PORT = process.env.PORT || 3003;
-  app.listen(PORT, () => {
-    console.log(`[Order Service] Server is running on port ${PORT}`);
-  });
 };
 
 startServer().catch((err) => {

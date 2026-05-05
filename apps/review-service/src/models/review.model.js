@@ -65,6 +65,10 @@ const reviewSchema = new mongoose.Schema({
 // Compound index to speed up recent reviews per product and aggregation by rating
 reviewSchema.index({ productId: 1, createdAt: -1 });
 
+// Compound index for the avg-rating analytics aggregation: lets the first $match
+// hit an index even when productId is omitted (status: 'APPROVED' alone).
+reviewSchema.index({ status: 1, productId: 1 });
+
 // Virtual populate: enriches reviews with ProductDetail document from the same collection
 // Uses localField/foreignField because productId is a string UUID, not an ObjectId ref
 reviewSchema.virtual('productDetails', {
