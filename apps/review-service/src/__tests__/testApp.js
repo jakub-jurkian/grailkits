@@ -18,6 +18,7 @@ function createTestApp() {
   app.get('/api/v1/reviews/product/:productId', reviewController.getProductReviews);
   app.get('/api/v1/reviews/analytics/avg-rating', reviewController.getAvgRatingAnalytics);
   app.get('/api/v1/reviews/approved', reviewController.getApprovedReviews);
+  app.patch('/api/v1/reviews/:id/moderate', reviewController.moderateReview);
 
   return app;
 }

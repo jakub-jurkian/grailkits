@@ -167,3 +167,107 @@ describe('GET /api/v1/reviews/approved', () => {
     expect(res.body[0].productId).toBe(VALID_REVIEW.productId);
   });
 });
+
+// ─── PATCH /api/v1/reviews/:id/moderate ──────────────────────────────────────
+
+describe('PATCH /api/v1/reviews/:id/moderate', () => {
+  const PENDING_REVIEW = {
+    productId: 'a0000000-0000-0000-0000-000000000001',
+    userId: 'user-001',
+    rating: 4,
+    title: 'Great kit',
+    body: 'Arrived on time and fits well.',
+    status: 'PENDING',
+  };
+
+  it('approves a PENDING review and returns 200 with APPROVED status', async () => {
+    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    expect(created.status).toBe(201);
+    const reviewId = created.body._id;
+
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Looks good' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('APPROVED');
+  });
+
+  it('rejects a PENDING review and returns 200 with REJECTED status', async () => {
+    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'REJECTED', reason: 'Spam content' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe('REJECTED');
+  });
+
+  it('appends a moderationHistory entry with moderatorId and reason', async () => {
+    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'All good' });
+
+    expect(res.status).toBe(200);
+    const history = res.body.moderationHistory;
+    const approvalEntry = history.find((e) => e.status === 'APPROVED');
+    expect(approvalEntry).toBeDefined();
+    expect(approvalEntry.moderatorId).toBe('mod-001');
+    expect(approvalEntry.reason).toBe('All good');
+  });
+
+  it('returns 404 for a non-existent review ID', async () => {
+    const fakeId = '000000000000000000000001';
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${fakeId}/moderate`)
+      .send({ status: 'APPROVED' });
+
+    expect(res.status).toBe(404);
+    expect(res.body.code).toBe('NOT_FOUND');
+  });
+
+  it('returns 409 when review is already moderated', async () => {
+    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'APPROVED' });
+
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'REJECTED' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('CONFLICT');
+  });
+
+  it('returns 400 when status field is missing', async () => {
+    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ moderatorId: 'mod-001' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('BAD_REQUEST');
+  });
+
+  it('returns 400 when status is an invalid value', async () => {
+    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const reviewId = created.body._id;
+
+    const res = await request(app)
+      .patch(`/api/v1/reviews/${reviewId}/moderate`)
+      .send({ status: 'PENDING' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('BAD_REQUEST');
+  });
+});
