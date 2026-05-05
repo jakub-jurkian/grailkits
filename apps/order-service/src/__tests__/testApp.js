@@ -63,6 +63,7 @@ function createTestApp(variantMap = {}, overrideVariantRepo = null) {
   const cartController = new CartController(cartService);
 
   // Order routes
+  app.post('/api/v1/orders', orderController.createOrder);
   app.get('/api/v1/orders', orderController.getOrders);
   app.get('/api/v1/orders/:id', orderController.getOrderById);
   app.post('/api/v1/orders/:id/cancel', orderController.cancelOrder);
