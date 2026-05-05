@@ -15,10 +15,6 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'Review Service is operational' });
-});
-
 // Initialize Database Connection and seed
 const initDB = async () => {
   await connectDB();
@@ -30,7 +26,7 @@ const initDB = async () => {
 };
 initDB();
 
-// Initialize DI (Java-way)
+// Initialize DI
 const reviewRepository = new ReviewRepository();
 // Wire PG stats repo only when DATABASE_URL is present (skipped in test env)
 const productStatsRepository = process.env.DATABASE_URL
@@ -41,26 +37,14 @@ const reviewController = new ReviewController(reviewService);
 
 // Routes
 app.post("/api/v1/reviews", reviewController.createReview);
-app.get(
-  "/api/v1/reviews/product/:productId",
-  reviewController.getProductReviews,
-);
-app.get(
-  "/api/v1/reviews/analytics/avg-rating",
-  reviewController.getAvgRatingAnalytics,
-);
-app.get(
-  "/api/v1/reviews/approved",
-  reviewController.getApprovedReviews,
-);
-app.patch(
-  "/api/v1/reviews/:id/moderate",
-  reviewController.moderateReview,
-);
+app.get("/api/v1/reviews/product/:productId", reviewController.getProductReviews);
+app.get("/api/v1/reviews/analytics/avg-rating", reviewController.getAvgRatingAnalytics);
+app.get("/api/v1/reviews/approved", reviewController.getApprovedReviews);
+app.patch("/api/v1/reviews/:id/moderate", reviewController.moderateReview);
 
 // Health Check
 app.get("/health", (req, res) => {
-  res.status(200).json({ status: "Catalog Service is operational" });
+  res.status(200).json({ status: "Review Service is operational" });
 });
 
 // Start the server
