@@ -230,3 +230,36 @@ describe('POST /api/v1/orders/:id/cancel', () => {
     expect(res.status).toBe(409);
   });
 });
+
+// ─── Order model domain hook ──────────────────────────────────────────────────
+
+describe('beforeCreate domain hook — totalPrice guard', () => {
+  it('returns 400 when order is created with zero totalPrice', async () => {
+    const app = makeApp();
+    const res = await request(app)
+      .post('/api/v1/orders')
+      .send({ userId: 'user-hook-test', items: [{ variantId: 'variant-001', quantity: 0, unitPrice: 0 }] });
+
+    // quantity * unitPrice = 0 → totalPrice = 0 → hook throws
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when order is created with negative totalPrice', async () => {
+    const app = makeApp();
+    const res = await request(app)
+      .post('/api/v1/orders')
+      .send({ userId: 'user-hook-test', items: [{ variantId: 'variant-001', quantity: 1, unitPrice: -50 }] });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts an order with a positive totalPrice and rounds to 2dp', async () => {
+    const app = makeApp();
+    const res = await request(app)
+      .post('/api/v1/orders')
+      .send({ userId: 'user-hook-test', items: [{ variantId: 'variant-001', quantity: 1, unitPrice: 99.999 }] });
+
+    expect(res.status).toBe(201);
+    expect(Number(res.body.totalPrice)).toBe(100.00);
+  });
+});
