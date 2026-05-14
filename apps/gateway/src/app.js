@@ -14,20 +14,12 @@ app.get("/health", (req, res) => {
 
 // Proxy Rules
 // Route requests to the Catalog Service
+// External prefix /api/v1/products maps 1:1 to catalog-service internal routes — no rewrite needed
 app.use(
-  "/api/v1/catalog",
+  "/api/v1/products",
   createProxyMiddleware({
     target: process.env.CATALOG_SERVICE_URL,
     changeOrigin: true,
-    pathRewrite: (path) => {
-      const [pathname, qs] = path.split("?");
-      const query = qs ? `?${qs}` : "";
-
-      if (pathname === "/" || pathname === "") {
-        return `/api/v1/products${query}`;
-      }
-      return `/api/v1${pathname}${query}`;
-    },
   }),
 );
 

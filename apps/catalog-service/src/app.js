@@ -53,8 +53,8 @@ const startServer = async () => {
   const productService = new ProductService(productRepo, productDetailsRepo, productDetailMongoRepo);
   const productController = new ProductController(productService);
 
-  // Categories Route
-  app.get('/api/v1/categories', async (req, res) => {
+  // Categories Route — nested under /products for consistent external API
+  app.get('/api/v1/products/categories', async (req, res) => {
     try {
       const categories = await categoryRepo.findAll();
       res.json(categories);
