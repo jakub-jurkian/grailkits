@@ -8,6 +8,11 @@ info:
     requests to the three domain services. Direct service ports are documented
     for development convenience.
 
+    **Gateway routing (1:1, no path rewrite for products/reviews):**
+      - `/api/v1/products/*`  → catalog-service `:3001`
+      - `/api/v1/reviews/*`   → review-service `:3002`
+      - `/api/v1/orders/*`, `/api/v1/cart/*`, `/api/v1/checkout` → order-service `:3003`
+
     **Authentication:** Pass `X-User-Id: <userId>` header on all cart, order,
     and checkout endpoints (fake auth — no JWT required).
 
@@ -51,93 +56,14 @@ paths:
                 status: API Gateway is operational
 
   # ── Catalog ───────────────────────────────────────────────────────────────
-  /api/v1/catalog:
-    get:
-      summary: List products (via gateway)
-      tags: [Catalog]
-      parameters:
-        - $ref: '#/components/parameters/categoryId'
-        - $ref: '#/components/parameters/minPrice'
-        - $ref: '#/components/parameters/maxPrice'
-        - $ref: '#/components/parameters/available'
-      responses:
-        '200':
-          description: Array of products with nested variants
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/ProductSummary'
-        '500':
-          $ref: '#/components/responses/InternalError'
-    post:
-      summary: Create a product (via gateway)
-      tags: [Catalog]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ProductCreateRequest'
-            example:
-              name: Barcelona 2006 Home
-              brand: Nike
-              description: Classic Ronaldinho-era shirt
-              categoryId: 1
-      responses:
-        '201':
-          description: Product created
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductDetail'
-        '409':
-          description: SKU already exists (unique constraint)
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/v1/catalog/{id}:
-    get:
-      summary: Get product details (via gateway)
-      tags: [Catalog]
-      parameters:
-        - $ref: '#/components/parameters/productId'
-      responses:
-        '200':
-          description: Full product detail including variants and Mongo enrichment
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ProductDetail'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
-  /api/v1/catalog/categories:
-    get:
-      summary: List categories (via gateway)
-      tags: [Catalog]
-      responses:
-        '200':
-          description: Array of categories
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/Category'
-        '500':
-          $ref: '#/components/responses/InternalError'
-
   /api/v1/products:
     get:
-      summary: List products (direct — catalog service)
+      summary: List products with dynamic filters
+      description: |
+        Returns products with nested variants. Supports dynamic filtering by
+        category, price range, and availability — all combined safely in a
+        Knex query builder (no SQL string concatenation; `?`-placeholders
+        converted to PostgreSQL `$1, $2` via `toSQL().toNative()`).
       tags: [Catalog]
       parameters:
         - $ref: '#/components/parameters/categoryId'
@@ -167,7 +93,13 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
     post:
-      summary: Create a product (direct — catalog service)
+      summary: Create a product (hybrid PG + Mongo write with compensation)
+      description: |
+        Writes the relational record to PostgreSQL (via Prisma) and then writes
+        the document details (longDescription, specs, gallery) to MongoDB via the
+        native driver. If the MongoDB write fails, the PostgreSQL record is
+        deleted (compensation) so the two stores stay consistent. Returns 503 if
+        compensation triggers.
       tags: [Catalog]
       requestBody:
         required: true
@@ -175,17 +107,47 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/ProductCreateRequest'
+            example:
+              name: Barcelona 2006 Home
+              brand: Nike
+              description: Classic Ronaldinho-era shirt
+              categoryId: 1
+              longDescription: "Iconic dark blue Nike shirt from the 2005-06 season."
+              specs:
+                manufacturer: Nike
+                season: 2005-06
+                fit: Regular
+              gallery:
+                - https://assets.grailkits.com/bar06-home-front.jpg
       responses:
         '201':
-          description: Product created
+          description: Product created in both stores
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProductDetail'
+        '400':
+          description: Invalid foreign key (e.g. unknown categoryId) — mapped from pg 23503
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
         '409':
-          $ref: '#/components/responses/Conflict'
-        '500':
-          $ref: '#/components/responses/InternalError'
+          description: Unique constraint violated (e.g. SKU) — mapped from pg 23505
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: MongoDB write failed; compensation rolled back the PG insert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Product creation failed: could not persist document details"
+                code: INTERNAL_ERROR
+                details: "MongoServerError: connection refused"
 
   /api/v1/products/count:
     get:
@@ -206,7 +168,13 @@ paths:
 
   /api/v1/products/{id}:
     get:
-      summary: Get product details (direct — catalog service)
+      summary: Get product details (PostgreSQL + MongoDB enrichment)
+      description: |
+        Fetches the relational product (with category and variants) from PostgreSQL
+        via Prisma `findUnique` with `include`, then enriches it with the document
+        details (longDescription, specs, gallery) from MongoDB via the native
+        driver (`$eq` operator on `productId`). If the MongoDB read fails, the
+        relational data is still returned (graceful degradation).
       tags: [Catalog]
       parameters:
         - $ref: '#/components/parameters/productId'
@@ -222,9 +190,14 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
-  /api/v1/categories:
+  /api/v1/products/categories:
     get:
-      summary: List categories (direct — catalog service)
+      summary: List categories
+      description: |
+        Returns all product categories. Nested under `/products` for a consistent
+        external API surface (gateway routes `/api/v1/products/*` 1:1 to catalog-service
+        without path rewrite). Registered before `/api/v1/products/{id}` in the
+        catalog-service route table so it matches before the catch-all `:id` route.
       tags: [Catalog]
       responses:
         '200':
@@ -237,9 +210,17 @@ paths:
                   $ref: '#/components/schemas/Category'
               example:
                 - id: 1
-                  name: Retro
+                  name: Retro 90s
                 - id: 2
-                  name: Modern
+                  name: Retro 00s
+                - id: 3
+                  name: Match Issue
+                - id: 4
+                  name: Limited Edition
+                - id: 5
+                  name: Modern Grails
+        '500':
+          $ref: '#/components/responses/InternalError'
 
   # ── Cart ─────────────────────────────────────────────────────────────────
   /api/v1/cart/lines:
@@ -573,6 +554,89 @@ paths:
                   $ref: '#/components/schemas/Review'
         '500':
           $ref: '#/components/responses/InternalError'
+
+  /api/v1/reviews/{id}/moderate:
+    patch:
+      summary: Approve or reject a pending review (hybrid Mongo + PG write-back)
+      description: |
+        Moves a review from `PENDING` to `APPROVED` or `REJECTED`. The repository
+        appends an entry to `moderationHistory` with `moderatorId` and `reason`,
+        and the pre-save hook is suppressed for this write to avoid duplicate
+        history entries.
+
+        On `APPROVED`, the service additionally recomputes `avg_rating` and
+        `review_count` via a MongoDB aggregation and writes them back to the
+        `products` row in PostgreSQL (parameterised `pg` query). If the PG
+        write fails, the review status is reverted to `PENDING` (compensation)
+        and the response is `503`.
+      tags: [Reviews]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+          description: Review `_id` (Mongo ObjectId)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, REJECTED]
+                moderatorId:
+                  type: string
+                  description: Identifier of the moderator performing the action
+                reason:
+                  type: string
+                  description: Optional rationale (logged in moderationHistory)
+            example:
+              status: APPROVED
+              moderatorId: mod-001
+              reason: "Looks good"
+      responses:
+        '200':
+          description: Updated review with new status and a fresh moderationHistory entry
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Review'
+        '400':
+          description: Missing or invalid `status` value (must be APPROVED or REJECTED)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid moderation status. Must be one of: APPROVED, REJECTED"
+                code: BAD_REQUEST
+                details: null
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: Review has already been moderated (not in PENDING state)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Review has already been moderated (status: APPROVED)"
+                code: CONFLICT
+                details: null
+        '503':
+          description: PG write-back failed; MongoDB status was reverted to PENDING (compensation)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Review approval failed: could not update product statistics"
+                code: INTERNAL_ERROR
+                details: "connection refused"
 
 # ── Components ────────────────────────────────────────────────────────────────
 components:
