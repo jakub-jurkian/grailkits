@@ -8,16 +8,19 @@ const ProductDetailsRepository = require('../repositories/product-details.reposi
 const ProductService = require('../services/product.service');
 const ProductController = require('../controllers/product.controller');
 
-// Stub for MongoDB ProductDetailRepository — service handles null non-fatally
-const mongoRepoStub = {
+// Default stub for MongoDB ProductDetailRepository - service handles null non-fatally
+const DEFAULT_MONGO_STUB = {
   create: async () => null,
   findByProductId: async () => null,
   findManyByProductIds: async () => [],
-  updateByProductId: async () => false,
+  searchByText: async () => [],
+  updateByProductId: async () => true,
   deleteByProductId: async () => false,
 };
 
-function createTestApp(pool) {
+// Tests can pass `mongoRepoOverride` to swap individual methods (e.g. to
+// simulate "document not found" for the PATCH /details 404 path).
+function createTestApp(pool, mongoRepoOverride = {}) {
   const app = express();
   app.use(express.json());
 
@@ -25,10 +28,12 @@ function createTestApp(pool) {
     datasources: { db: { url: process.env.DATABASE_URL } },
   });
 
+  const mongoRepo = { ...DEFAULT_MONGO_STUB, ...mongoRepoOverride };
+
   const categoryRepo = new CategoryRepository(pool);
   const productRepo = new ProductRepository(pool);
   const productDetailsRepo = new ProductDetailsRepository(prisma);
-  const productService = new ProductService(productRepo, productDetailsRepo, mongoRepoStub);
+  const productService = new ProductService(productRepo, productDetailsRepo, mongoRepo);
   const productController = new ProductController(productService);
 
   app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
@@ -42,9 +47,12 @@ function createTestApp(pool) {
     }
   });
 
-  app.get('/api/v1/products', productController.getProducts);
+  // Same order as production app.js: /search and /count before /:id catch-all.
+  app.get('/api/v1/products/search', productController.searchProducts);
   app.get('/api/v1/products/count', productController.getProductCount);
+  app.get('/api/v1/products', productController.getProducts);
   app.get('/api/v1/products/:id', productController.getProductDetails);
+  app.patch('/api/v1/products/:id/details', productController.updateProductDetails);
   app.post('/api/v1/products', productController.createProduct);
 
   return app;
