@@ -17,23 +17,19 @@ const seedProductDetails = require('./db/seed_product_details');
 const app = express();
 app.use(express.json());
 
-// Health endpoint registered first so it responds immediately during startup
 app.get('/health', (req, res) => {
   res.status(200).json({ status: 'Catalog Service is operational' });
 });
 
-// Start listening before async init so the health check passes right away
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {
   console.log(`[Catalog Service] Server is running on port ${PORT}`);
 });
 
 const startServer = async () => {
-  // Run Knex migrations so tables exist before any request hits them
   await knex.migrate.latest();
   console.log('[Catalog Service] Migrations applied');
 
-  // Seed initial data (idempotent — seeds clear and re-insert)
   await knex.seed.run();
   console.log('[Catalog Service] Seeds applied');
 
@@ -45,7 +41,6 @@ const startServer = async () => {
     console.error('[Catalog Service] MongoDB seeding failed (non-fatal):', err.message);
   }
 
-  // DI (Composition Root)
   const categoryRepo = new CategoryRepository(pool);
   const productRepo = new ProductRepository(pool);
   const productDetailsRepo = new ProductDetailsRepository(prisma);
@@ -53,7 +48,6 @@ const startServer = async () => {
   const productService = new ProductService(productRepo, productDetailsRepo, productDetailMongoRepo);
   const productController = new ProductController(productService);
 
-  // Categories Route — nested under /products for consistent external API
   app.get('/api/v1/products/categories', async (req, res) => {
     try {
       const categories = await categoryRepo.findAll();
@@ -67,9 +61,14 @@ const startServer = async () => {
   });
 
   // Products Routes
-  app.get('/api/v1/products', productController.getProducts);
+  // NOTE on ordering: more-specific paths (/search, /count) must be registered
+  // BEFORE the catch-all /:id, otherwise Express would match "search" or "count"
+  // as the :id parameter and route them to getProductDetails.
+  app.get('/api/v1/products/search', productController.searchProducts);
   app.get('/api/v1/products/count', productController.getProductCount);
+  app.get('/api/v1/products', productController.getProducts);
   app.get('/api/v1/products/:id', productController.getProductDetails);
+  app.patch('/api/v1/products/:id/details', productController.updateProductDetails);
   app.post('/api/v1/products', productController.createProduct);
 };
 

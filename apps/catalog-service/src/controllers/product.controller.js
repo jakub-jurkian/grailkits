@@ -7,6 +7,8 @@ class ProductController {
     this.getProductDetails = this.getProductDetails.bind(this);
     this.getProductCount = this.getProductCount.bind(this);
     this.createProduct = this.createProduct.bind(this);
+    this.searchProducts = this.searchProducts.bind(this);
+    this.updateProductDetails = this.updateProductDetails.bind(this);
   }
 
   async getProducts(req, res) {
@@ -55,6 +57,28 @@ class ProductController {
       res.status(201).json(product);
     } catch (error) {
       console.error('[ProductController] Error creating product:', error);
+      errorResponse(res, error);
+    }
+  }
+
+  // T5: GET /api/v1/products/search?q=<term> - full-text search via $text/$search
+  async searchProducts(req, res) {
+    try {
+      const results = await this.productService.searchProductsByText(req.query.q);
+      res.status(200).json(results);
+    } catch (error) {
+      console.error('[ProductController] Error searching products:', error);
+      errorResponse(res, error);
+    }
+  }
+
+  // T5: PATCH /api/v1/products/:id/details - partial update via $set with whitelist
+  async updateProductDetails(req, res) {
+    try {
+      const updated = await this.productService.updateProductDetails(req.params.id, req.body);
+      res.status(200).json(updated);
+    } catch (error) {
+      console.error('[ProductController] Error updating product details:', error);
       errorResponse(res, error);
     }
   }

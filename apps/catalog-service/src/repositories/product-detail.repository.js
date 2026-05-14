@@ -10,23 +10,19 @@ class ProductDetailRepository {
   // Insert a new product detail document
   async create(productId, details) {
     const doc = {
-      productId,                            // string UUID matching PG products.id
+      productId,
       longDescription: details.longDescription || '',
-      specs: details.specs || {},           // free-form key-value map
-      gallery: details.gallery || [],       // array of image URLs
+      specs: details.specs || {},
+      gallery: details.gallery || [],
       createdAt: new Date(),
     };
-
-    // $eq is used implicitly by the unique index; insertOne throws 11000 on dupe
     const result = await this._col().insertOne(doc);
     return { ...doc, _id: result.insertedId };
   }
 
   // Fetch one document by productId ($eq operator)
   async findByProductId(productId) {
-    return await this._col().findOne(
-      { productId: { $eq: productId } },
-    );
+    return await this._col().findOne({ productId: { $eq: productId } });
   }
 
   // Fetch details for multiple products at once ($in operator)
@@ -36,12 +32,14 @@ class ProductDetailRepository {
       .toArray();
   }
 
-  // Full-text search across longDescription ($text + $search operators)
-  async searchByText(searchTerm) {
+  // Full-text search across longDescription ($text + $search).
+  // Results scored with $meta:'textScore' and capped at `limit` (default 20).
+  async searchByText(searchTerm, limit = 20) {
     return await this._col()
       .find({ $text: { $search: searchTerm } })
       .project({ score: { $meta: 'textScore' } })
       .sort({ score: { $meta: 'textScore' } })
+      .limit(limit)
       .toArray();
   }
 
@@ -49,12 +47,12 @@ class ProductDetailRepository {
   async updateByProductId(productId, patch) {
     const result = await this._col().updateOne(
       { productId: { $eq: productId } },
-      { $set: { ...patch, updatedAt: new Date() } },
+      { $set: { ...patch, updatedAt: new Date() } }
     );
     return result.modifiedCount > 0;
   }
 
-  // Remove document — used for compensation when PG write is rolled back
+  // Remove document - used for compensation when PG write is rolled back
   async deleteByProductId(productId) {
     const result = await this._col().deleteOne({ productId: { $eq: productId } });
     return result.deletedCount > 0;
