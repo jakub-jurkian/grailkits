@@ -97,11 +97,12 @@ paths:
     post:
       summary: Create a product (hybrid PG + Mongo write with compensation)
       description: |
-        Writes the relational record to PostgreSQL (via Prisma) and then writes
-        the document details (longDescription, specs, gallery) to MongoDB via the
-        native driver. If the MongoDB write fails, the PostgreSQL record is
-        deleted (compensation) so the two stores stay consistent. Returns 503 if
-        compensation triggers.
+        Writes the relational record to PostgreSQL via the `pg` driver with
+        parametrised queries (`INSERT INTO products ... RETURNING *`) and then
+        writes the document details (longDescription, specs, gallery) to MongoDB
+        via the native driver. If the MongoDB write fails, the PostgreSQL record
+        is deleted (compensation) so the two stores stay consistent. Returns 503
+        if compensation triggers.
       tags: [Catalog]
       requestBody:
         required: true
@@ -172,11 +173,13 @@ paths:
     get:
       summary: Get product details (PostgreSQL + MongoDB enrichment)
       description: |
-        Fetches the relational product (with category and variants) from PostgreSQL
-        via Prisma `findUnique` with `include`, then enriches it with the document
-        details (longDescription, specs, gallery) from MongoDB via the native
-        driver (`$eq` operator on `productId`). If the MongoDB read fails, the
-        relational data is still returned (graceful degradation).
+        Fetches the relational product (with its category and all variants) from
+        PostgreSQL via a single `pg` query that does `LEFT JOIN categories` and
+        `LEFT JOIN variants`, then hydrates the result into a nested object. The
+        response is then enriched with the document details (longDescription,
+        specs, gallery) from MongoDB via the native driver (`$eq` operator on
+        `productId`). If the MongoDB read fails, the relational data is still
+        returned (graceful degradation).
       tags: [Catalog]
       parameters:
         - $ref: '#/components/parameters/productId'
