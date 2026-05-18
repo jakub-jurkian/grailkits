@@ -1,0 +1,47 @@
+// GrailKits order-service Prisma schema.
+//
+// Prisma here owns a NEW, disjoint slice of the order-service PostgreSQL
+// database: `Payment` and `PaymentEvent`. The cart/orders tables are
+// owned and synced by Sequelize via `sync({ alter: true })`. There is
+// intentionally NO foreign-key constraint from Payment.orderId to the
+// `orders` table so that Prisma `migrate deploy` and Sequelize `sync`
+// can run independently on container startup without ordering coupling.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// A single payment attempt for an order. State machine:
+//   PENDING -> AUTHORIZED -> (no further transitions in this model)
+//           -> FAILED
+//           -> REFUNDED (only from AUTHORIZED)
+model Payment {
+  id        String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  orderId   String         @db.Uuid                          // loose UUID reference, no FK
+  amount    Int                                              // grosze (smallest unit)
+  method    String         @default("CARD")                  // CARD / TRANSFER / BLIK / ...
+  status    String         @default("PENDING")               // PENDING / AUTHORIZED / FAILED / REFUNDED
+  createdAt DateTime       @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime       @updatedAt      @db.Timestamptz(6)
+  events    PaymentEvent[]
+
+  @@index([orderId])
+  @@index([status])
+}
+
+// Append-only audit trail for a payment. Every status change writes one row.
+model PaymentEvent {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  paymentId String   @db.Uuid
+  type      String                                          // STATUS_CHANGE / NOTE / etc.
+  payload   Json?                                           // free-form metadata (e.g. provider txn id)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  payment   Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  @@index([paymentId])
+}
