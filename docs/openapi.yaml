@@ -222,6 +222,142 @@ paths:
         '500':
           $ref: '#/components/responses/InternalError'
 
+  /api/v1/products/search:
+    get:
+      summary: Full-text search across product descriptions
+      description: |
+        Runs a MongoDB full-text search against the `product_details` collection
+        using the **`$text`** and **`$search`** operators (the catalog already
+        has a text index on `longDescription`). Results are scored with
+        `$meta: 'textScore'`, sorted by relevance, and capped at 20.
+
+        Registered **before** `/api/v1/products/{id}` in the route table so
+        Express does not interpret the literal `"search"` as a `:id` parameter.
+      tags: [Catalog]
+      parameters:
+        - in: query
+          name: q
+          required: true
+          schema:
+            type: string
+            minLength: 2
+          description: Search term (must be at least 2 characters)
+      responses:
+        '200':
+          description: Array of matching product_details documents sorted by relevance
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    _id:
+                      type: string
+                    productId:
+                      type: string
+                    longDescription:
+                      type: string
+                    specs:
+                      type: object
+                    gallery:
+                      type: array
+                      items:
+                        type: string
+                    score:
+                      type: number
+                      description: textScore returned by `$meta`
+              example:
+                - _id: 65a0000000000000000000a1
+                  productId: a0000000-0000-0000-0000-000000000001
+                  longDescription: "Iconic Zidane-era Adidas shirt from the 1998 World Cup..."
+                  score: 1.45
+        '400':
+          description: Missing or too-short `q` query parameter
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: 'Query parameter "q" is required (min 2 characters)'
+                code: BAD_REQUEST
+                details: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/products/{id}/details:
+    patch:
+      summary: Patch the MongoDB document details for a product
+      description: |
+        Partial update of the `product_details` document in MongoDB using the
+        **`$set`** operator. The service strictly whitelists the writeable
+        keys (`longDescription`, `specs`, `gallery`) before passing the patch
+        to the native driver, so unknown fields and Mongo query operators in
+        the body are silently dropped — this guards against operator-injection
+        attacks. Each field is also type-checked (string / plain object / array).
+      tags: [Catalog]
+      parameters:
+        - $ref: '#/components/parameters/productId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                longDescription:
+                  type: string
+                specs:
+                  type: object
+                  additionalProperties:
+                    type: string
+                gallery:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+            example:
+              longDescription: "Updated description with even more historical context."
+              specs:
+                manufacturer: Adidas
+                condition: "Mint"
+              gallery:
+                - https://assets.grailkits.com/fra98-home-front-v2.jpg
+      responses:
+        '200':
+          description: Whitelisted patch was applied to the document
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  productId:
+                    type: string
+                  updated:
+                    type: object
+              example:
+                productId: a0000000-0000-0000-0000-000000000004
+                updated:
+                  longDescription: "Updated description..."
+        '400':
+          description: Empty body, no whitelisted fields present, or wrong field type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Body must contain at least one of: longDescription, specs, gallery"
+                code: BAD_REQUEST
+                details: null
+        '404':
+          description: No product_details document exists for this productId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
   # ── Cart ─────────────────────────────────────────────────────────────────
   /api/v1/cart/lines:
     post:

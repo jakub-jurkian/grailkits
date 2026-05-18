@@ -5,9 +5,6 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
-COPY prisma ./prisma/
-RUN npx prisma generate
-
 COPY . .
 
 FROM node:20-alpine AS runner
@@ -19,12 +16,9 @@ COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
 COPY --from=builder /app/knexfile.js ./knexfile.js
-# Prisma schema + migration files needed for migrate deploy at runtime
-COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3001
 
-# Both Prisma migrations are baselined (schema is owned by Knex, which runs
-# inside npm start via knex.migrate.latest()). Semicolons ignore exit codes
-# so re-runs don't fail when the migrations are already tracked.
-CMD ["sh", "-c", "npx prisma migrate resolve --applied 20240101000000_init 2>/dev/null; npx prisma migrate resolve --applied 20240102000000_add_review_stats_to_products 2>/dev/null; npx prisma migrate deploy && npm start"]
+# Schema is created by Knex migrations inside npm start (knex.migrate.latest()).
+# No Prisma in catalog-service anymore - Prisma now lives in order-service.
+CMD ["npm", "start"]

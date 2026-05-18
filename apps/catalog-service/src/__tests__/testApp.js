@@ -1,6 +1,5 @@
 // Builds the Express app for tests without listen(), real Mongo, or side-effecting app.js
 const express = require('express');
-const { PrismaClient } = require('@prisma/client');
 
 const CategoryRepository = require('../repositories/category.repository');
 const ProductRepository = require('../repositories/product.repository');
@@ -24,15 +23,11 @@ function createTestApp(pool, mongoRepoOverride = {}) {
   const app = express();
   app.use(express.json());
 
-  const prisma = new PrismaClient({
-    datasources: { db: { url: process.env.DATABASE_URL } },
-  });
-
   const mongoRepo = { ...DEFAULT_MONGO_STUB, ...mongoRepoOverride };
 
   const categoryRepo = new CategoryRepository(pool);
   const productRepo = new ProductRepository(pool);
-  const productDetailsRepo = new ProductDetailsRepository(prisma);
+  const productDetailsRepo = new ProductDetailsRepository(pool);
   const productService = new ProductService(productRepo, productDetailsRepo, mongoRepo);
   const productController = new ProductController(productService);
 
