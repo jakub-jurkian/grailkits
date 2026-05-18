@@ -35,6 +35,8 @@ tags:
     description: Shopping cart management
   - name: Orders
     description: Order placement, history and cancellation
+  - name: Payments
+    description: Payment lifecycle for orders (Prisma-owned domain)
   - name: Reviews
     description: Product reviews, moderation and analytics
 
@@ -574,7 +576,233 @@ paths:
                 code: CONFLICT
                 details: null
 
-  # ── Reviews ───────────────────────────────────────────────────────────────
+  # ── Payments ──────────────────────────────────────────────────────────────
+  /api/v1/orders/{id}/payment:
+    post:
+      summary: Create a Payment for an order (Prisma + $transaction)
+      description: |
+        Inserts a new `Payment` row in `PENDING` and writes the initial
+        `STATUS_CHANGE` entry to `PaymentEvent` inside a single
+        `prisma.$transaction`. The `orderId` is verified against the
+        Sequelize-owned `orders` table at the application layer before
+        the Prisma write (there is no FK at the schema level).
+      tags: [Payments]
+      parameters:
+        - $ref: '#/components/parameters/orderId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+            example:
+              amount: 89900
+              method: CARD
+      responses:
+        '201':
+          description: Payment created in PENDING
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '400':
+          description: Invalid amount, method, or missing orderId
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Referenced order does not exist
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/payments/count:
+    get:
+      summary: Count payments by status ($queryRaw with tagged template)
+      description: |
+        Returns the number of Payment rows with the requested status.
+        Implemented as a Prisma `$queryRaw` tagged template literal -
+        the `${status}` value is parameterised by the `sql` tag, no
+        string concatenation. Registered BEFORE `/payments/{id}` in
+        the route table so Express does not match `count` as `id`.
+      tags: [Payments]
+      parameters:
+        - in: query
+          name: status
+          required: true
+          schema:
+            type: string
+            enum: [PENDING, AUTHORIZED, FAILED, REFUNDED]
+          description: Payment status to count
+      responses:
+        '200':
+          description: Count for the requested status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  total:
+                    type: integer
+              example:
+                status: PENDING
+                total: 4
+        '400':
+          description: Missing or invalid status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/payments/{id}:
+    get:
+      summary: Get a Payment with its full event history (Prisma findUnique + include)
+      description: |
+        Returns the `Payment` row with all related `PaymentEvent` rows
+        eager-loaded via Prisma's `include`. Events ordered by
+        `createdAt` ascending so the caller sees the full state-machine
+        history.
+      tags: [Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment UUID
+      responses:
+        '200':
+          description: Payment with events
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: No Payment with this id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/payments/{id}/authorize:
+    post:
+      summary: Transition a Payment from PENDING to AUTHORIZED (Prisma $transaction)
+      description: |
+        Atomically updates `Payment.status` to `AUTHORIZED` and appends
+        a `PaymentEvent` (type `STATUS_CHANGE`) inside a single
+        `prisma.$transaction`. Only Payments in `PENDING` can be
+        authorized; other states return 409.
+      tags: [Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment UUID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: object
+                  description: Free-form metadata recorded in PaymentEvent.payload
+            example:
+              payload:
+                providerTxnId: txn_abc_123
+      responses:
+        '200':
+          description: Payment authorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Payment is not in PENDING state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Payment cannot be authorized from status: AUTHORIZED"
+                code: CONFLICT
+                details: null
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  /api/v1/payments/{id}/fail:
+    post:
+      summary: Transition a Payment from PENDING to FAILED (Prisma $transaction)
+      description: |
+        Atomically updates `Payment.status` to `FAILED` and appends a
+        `PaymentEvent` (with `reason` in `payload`) inside a single
+        `prisma.$transaction`. Only Payments in `PENDING` can be
+        failed.
+      tags: [Payments]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Payment UUID
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  description: Free-form rationale recorded in PaymentEvent.payload
+            example:
+              reason: declined_by_provider
+      responses:
+        '200':
+          description: Payment marked failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Payment'
+        '404':
+          description: Payment not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Payment is not in PENDING state
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalError'
+
+  # -- Reviews ---------------------------------------------------------------
   /api/v1/reviews:
     post:
       summary: Submit a product review
@@ -1209,3 +1437,75 @@ components:
           $ref: '#/components/schemas/ProductMongoDetails'
           nullable: true
       required: [productId, avgRating, reviewCount]
+
+    Payment:
+      type: object
+      description: Payment row owned by Prisma in order-service
+      properties:
+        id:
+          type: string
+          format: uuid
+        orderId:
+          type: string
+          format: uuid
+          description: Loose UUID reference to the Sequelize-owned orders table (no FK at the schema level)
+        amount:
+          type: integer
+          description: Amount in smallest currency unit (grosze)
+        method:
+          type: string
+          enum: [CARD, TRANSFER, BLIK]
+          default: CARD
+        status:
+          type: string
+          enum: [PENDING, AUTHORIZED, FAILED, REFUNDED]
+          default: PENDING
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        events:
+          type: array
+          description: Eager-loaded PaymentEvent rows ordered by createdAt asc
+          items:
+            $ref: '#/components/schemas/PaymentEvent'
+      required: [id, orderId, amount, method, status]
+
+    PaymentEvent:
+      type: object
+      description: Append-only audit trail entry for a Payment
+      properties:
+        id:
+          type: string
+          format: uuid
+        paymentId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          example: STATUS_CHANGE
+        payload:
+          type: object
+          nullable: true
+          description: Free-form metadata - typically { from, to, reason } for STATUS_CHANGE
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, paymentId, type]
+
+    PaymentCreateRequest:
+      type: object
+      description: Body for POST /api/v1/orders/{id}/payment
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          description: Amount in grosze (must be a positive integer)
+        method:
+          type: string
+          enum: [CARD, TRANSFER, BLIK]
+          default: CARD
+      required: [amount]
+
