@@ -7,10 +7,13 @@ const seedOrders = require("./db/seeds/seed_orders");
 const OrderRepository = require("./repositories/order.repository");
 const CartRepository = require("./repositories/cart.repository");
 const VariantRepository = require("./repositories/variant.repository");
+const PaymentRepository = require("./repositories/payment.repository");
 const OrderService = require("./services/order.service");
 const CartService = require("./services/cart.service");
+const PaymentService = require("./services/payment.service");
 const OrderController = require("./controllers/order.controller");
 const CartController = require("./controllers/cart.controller");
+const PaymentController = require("./controllers/payment.controller");
 
 const app = express();
 
@@ -30,10 +33,11 @@ app.listen(PORT, () => {
 });
 
 const startServer = async () => {
-  // connect with db
   await connectDB();
 
-  // sequelize autom. creates tables in psql if don't exist
+  // Sequelize manages carts, cart_lines, orders, order_items.
+  // Prisma owns Payment, PaymentEvent and runs migrations via the Dockerfile
+  // CMD (`prisma migrate deploy && npm start`) before this code executes.
   await sequelize.sync({ alter: true });
   console.log("[Order Service] Database models synchronized");
 
@@ -43,29 +47,49 @@ const startServer = async () => {
     console.error('[Order Service] Seeding failed (non-fatal):', err.message);
   }
 
-  // DI
+  // DI - Sequelize-driven repos
   const orderRepository = new OrderRepository();
   const cartRepository = new CartRepository();
   const variantRepository = new VariantRepository();
+
+  // DI - Prisma-driven repo (T4)
+  const paymentRepository = new PaymentRepository();
+
+  // Services
   const orderService = new OrderService(orderRepository, variantRepository);
   const cartService = new CartService(
     cartRepository,
     variantRepository,
     orderRepository,
   );
+  // Cross-tool composition: PaymentService can verify an order exists via the
+  // Sequelize-backed OrderRepository before writing a Prisma row.
+  const paymentService = new PaymentService(paymentRepository, orderRepository);
+
+  // Controllers
   const orderController = new OrderController(orderService);
   const cartController = new CartController(cartService);
+  const paymentController = new PaymentController(paymentService);
 
   // Order routes
   app.get("/api/v1/orders", orderController.getOrders);
   app.get("/api/v1/orders/:id", orderController.getOrderById);
   app.post("/api/v1/orders/:id/cancel", orderController.cancelOrder);
+  app.post("/api/v1/orders/:id/payment", paymentController.create);
   app.post("/api/v1/orders", orderController.createOrder);
 
   // Cart routes
   app.post("/api/v1/cart/lines", cartController.addLine);
   app.get("/api/v1/cart", cartController.getCart);
   app.post("/api/v1/checkout", cartController.checkout);
+
+  // Payment routes (T4 — Prisma).
+  // Ordering: /payments/count MUST come before /payments/:id, otherwise
+  // Express would match "count" as the :id parameter and dispatch to getById.
+  app.get("/api/v1/payments/count", paymentController.countByStatus);
+  app.get("/api/v1/payments/:id", paymentController.getById);
+  app.post("/api/v1/payments/:id/authorize", paymentController.authorize);
+  app.post("/api/v1/payments/:id/fail", paymentController.markFailed);
 };
 
 startServer().catch((err) => {

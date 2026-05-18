@@ -5,6 +5,12 @@ WORKDIR /app
 COPY package*.json ./
 RUN npm ci
 
+# Prisma schema is needed at install time for `prisma generate` to produce
+# the typed client in node_modules/@prisma/client. Migration files are also
+# copied so the runner can run `prisma migrate deploy` against a clean DB.
+COPY prisma ./prisma/
+RUN npx prisma generate
+
 COPY . .
 
 FROM node:20-alpine AS runner
@@ -15,7 +21,13 @@ ENV NODE_ENV=production
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/src ./src
+# Migration files must be available at runtime for `prisma migrate deploy`
+COPY --from=builder /app/prisma ./prisma
 
 EXPOSE 3003
 
-CMD ["npm", "start"]
+# Apply Prisma migrations (creates Payment + PaymentEvent on a clean DB,
+# is a no-op on subsequent boots) and then start the Express server.
+# Sequelize's own `sync({ alter: true })` runs inside src/app.js as before
+# and manages a disjoint set of tables (carts, cart_lines, orders, order_items).
+CMD ["sh", "-c", "npx prisma migrate deploy && npm start"]

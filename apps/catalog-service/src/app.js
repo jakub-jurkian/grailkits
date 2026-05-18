@@ -3,7 +3,6 @@ const knex = require("knex")(
   require("../knexfile")[process.env.NODE_ENV || "development"]
 );
 const pool = require("./config/db");
-const prisma = require('./config/prisma');
 
 const CategoryRepository = require("./repositories/category.repository");
 const ProductRepository = require('./repositories/product.repository');
@@ -43,7 +42,7 @@ const startServer = async () => {
 
   const categoryRepo = new CategoryRepository(pool);
   const productRepo = new ProductRepository(pool);
-  const productDetailsRepo = new ProductDetailsRepository(prisma);
+  const productDetailsRepo = new ProductDetailsRepository(pool);
   const productDetailMongoRepo = new ProductDetailRepository();
   const productService = new ProductService(productRepo, productDetailsRepo, productDetailMongoRepo);
   const productController = new ProductController(productService);
