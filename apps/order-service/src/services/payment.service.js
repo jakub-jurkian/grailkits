@@ -5,11 +5,6 @@ const VALID_STATUSES = ['PENDING', 'AUTHORIZED', 'FAILED', 'REFUNDED'];
 //   PENDING -> AUTHORIZED   (success)
 //   PENDING -> FAILED       (declined / provider error)
 //   AUTHORIZED -> REFUNDED  (out of scope for this iteration)
-//
-// Cross-table reference: Payment.orderId points at an Order row owned by
-// Sequelize, but there is no FK at the schema level (intentional, see
-// schema.prisma). If an orderRepository is wired we still verify the order
-// exists at the application layer.
 class PaymentService {
   constructor(paymentRepository, orderRepository = null) {
     this.paymentRepository = paymentRepository;

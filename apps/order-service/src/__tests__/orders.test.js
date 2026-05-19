@@ -1,6 +1,7 @@
 const request = require('supertest');
 const { setupDB, teardownDB } = require('./setup');
 const { createTestApp, createMockVariantRepo } = require('./testApp');
+const { Order } = require('../models');
 
 // ─── Shared variant fixtures ──────────────────────────────────────────────────
 
@@ -8,14 +9,14 @@ const VARIANTS = {
   'variant-001': {
     id: 'variant-001',
     product_id: 'product-001',
-    price: '100.00',
+    price: 10000,
     stock: 20,
     sku: 'SKU-001',
   },
   'variant-002': {
     id: 'variant-002',
     product_id: 'product-002',
-    price: '50.00',
+    price: 5000,
     stock: 10,
     sku: 'SKU-002',
   },
@@ -235,31 +236,26 @@ describe('POST /api/v1/orders/:id/cancel', () => {
 
 describe('beforeCreate domain hook — totalPrice guard', () => {
   it('returns 400 when order is created with zero totalPrice', async () => {
-    const app = makeApp();
-    const res = await request(app)
-      .post('/api/v1/orders')
-      .send({ userId: 'user-hook-test', items: [{ variantId: 'variant-001', quantity: 0, unitPrice: 0 }] });
-
-    // quantity * unitPrice = 0 → totalPrice = 0 → hook throws
-    expect(res.status).toBe(400);
+    try {
+      await Order.create({ userId: 'user-hook-test', totalPrice: 0, status: 'PENDING' });
+      throw new Error('Expected Order.create to throw');
+    } catch (err) {
+      expect(err.statusCode).toBe(400);
+    }
   });
 
-  it('returns 400 when order is created with negative totalPrice', async () => {
-    const app = makeApp();
-    const res = await request(app)
-      .post('/api/v1/orders')
-      .send({ userId: 'user-hook-test', items: [{ variantId: 'variant-001', quantity: 1, unitPrice: -50 }] });
-
-    expect(res.status).toBe(400);
+  it('returns 400 when order is created with non-integer totalPrice', async () => {
+    try {
+      await Order.create({ userId: 'user-hook-test', totalPrice: 99.99, status: 'PENDING' });
+      throw new Error('Expected Order.create to throw');
+    } catch (err) {
+      expect(err.statusCode).toBe(400);
+    }
   });
 
-  it('accepts an order with a positive totalPrice and rounds to 2dp', async () => {
-    const app = makeApp();
-    const res = await request(app)
-      .post('/api/v1/orders')
-      .send({ userId: 'user-hook-test', items: [{ productId: 'product-001', variantId: 'variant-001', quantity: 1, unitPrice: 99.999 }] });
-
-    expect(res.status).toBe(201);
-    expect(Number(res.body.totalPrice)).toBe(100.00);
+  it('accepts an order with a positive integer totalPrice', async () => {
+    const created = await Order.create({ userId: 'user-hook-test', totalPrice: 10000, status: 'PENDING' });
+    expect(created.totalPrice).toBe(10000);
+    await Order.destroy({ where: { id: created.id } });
   });
 });

@@ -62,12 +62,11 @@ const startServer = async () => {
     variantRepository,
     orderRepository,
   );
-  // Cross-tool composition: PaymentService can verify an order exists via the
-  // Sequelize-backed OrderRepository before writing a Prisma row.
+  
   const paymentService = new PaymentService(paymentRepository, orderRepository);
 
   // Controllers
-  const orderController = new OrderController(orderService);
+  const orderController = new OrderController(orderService, cartService);
   const cartController = new CartController(cartService);
   const paymentController = new PaymentController(paymentService);
 
@@ -83,9 +82,7 @@ const startServer = async () => {
   app.get("/api/v1/cart", cartController.getCart);
   app.post("/api/v1/checkout", cartController.checkout);
 
-  // Payment routes (T4 — Prisma).
-  // Ordering: /payments/count MUST come before /payments/:id, otherwise
-  // Express would match "count" as the :id parameter and dispatch to getById.
+  // Payment routes
   app.get("/api/v1/payments/count", paymentController.countByStatus);
   app.get("/api/v1/payments/:id", paymentController.getById);
   app.post("/api/v1/payments/:id/authorize", paymentController.authorize);

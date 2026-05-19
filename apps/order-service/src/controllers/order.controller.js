@@ -1,8 +1,9 @@
 const { errorResponse } = require('../utils/errors');
 
 class OrderController {
-  constructor(orderService) {
+  constructor(orderService, cartService) {
     this.orderService = orderService;
+    this.cartService = cartService;
     this.createOrder = this.createOrder.bind(this);
     this.getOrders = this.getOrders.bind(this);
     this.getOrderById = this.getOrderById.bind(this);
@@ -11,7 +12,7 @@ class OrderController {
 
   async getOrders(req, res) {
     try {
-      const userId = req.header('x-user-id') || req.query.userId;
+      const userId = req.header('x-user-id');
       const orders = await this.orderService.getOrdersByUser(userId);
       res.status(200).json(orders);
     } catch (error) {
@@ -21,7 +22,7 @@ class OrderController {
 
   async getOrderById(req, res) {
     try {
-      const userId = req.header('x-user-id') || req.query.userId;
+      const userId = req.header('x-user-id');
       const order = await this.orderService.getOrderById(req.params.id, userId);
       res.status(200).json(order);
     } catch (error) {
@@ -31,7 +32,7 @@ class OrderController {
 
   async cancelOrder(req, res) {
     try {
-      const userId = req.header('x-user-id') || req.body.userId;
+      const userId = req.header('x-user-id');
       const order = await this.orderService.cancelOrder(req.params.id, userId);
       res.status(200).json(order);
     } catch (error) {
@@ -41,12 +42,17 @@ class OrderController {
 
   async createOrder(req, res) {
     try {
-      const { userId, items } = req.body;
-      if (!userId || !items || !Array.isArray(items) || items.length === 0) {
-        const err = Object.assign(new Error('Missing user ID or cart items are invalid/empty'), { statusCode: 400 });
+      const userId = req.header('x-user-id');
+      const { items } = req.body || {};
+      if (!userId) {
+        const err = Object.assign(new Error('Missing x-user-id header'), { statusCode: 400 });
         return errorResponse(res, err);
       }
-      const order = await this.orderService.processCheckout(userId, items);
+      if (Array.isArray(items) && items.length > 0) {
+        const err = Object.assign(new Error('Use /api/v1/checkout for cart-based orders'), { statusCode: 400 });
+        return errorResponse(res, err);
+      }
+      const order = await this.cartService.checkout(userId);
       res.status(201).json(order);
     } catch (error) {
       console.error('[OrderController] Checkout failed:', error);

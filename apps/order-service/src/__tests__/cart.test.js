@@ -8,14 +8,14 @@ const VARIANTS = {
   'variant-001': {
     id: 'variant-001',
     product_id: 'product-001',
-    price: '120.00',
+    price: 12000,
     stock: 10,
     sku: 'SKU-001',
   },
   'variant-002': {
     id: 'variant-002',
     product_id: 'product-002',
-    price: '80.00',
+    price: 8000,
     stock: 3,
     sku: 'SKU-002',
   },
@@ -163,7 +163,7 @@ describe('POST /api/v1/checkout', () => {
     const app = makeApp();
     const userId = 'user-checkout-ok';
 
-    // variant-001 price = 120.00, qty = 2 → total = 240
+    // variant-001 price = 12000, qty = 2 → total = 24000 (grosze)
     await request(app)
       .post('/api/v1/cart/lines')
       .set('x-user-id', userId)
@@ -176,7 +176,7 @@ describe('POST /api/v1/checkout', () => {
     expect(res.status).toBe(201);
     expect(res.body).toHaveProperty('id');
     expect(res.body.status).toBe('PENDING');
-    expect(Number(res.body.totalPrice)).toBe(240);
+    expect(Number(res.body.totalPrice)).toBe(24000);
     expect(Array.isArray(res.body.items)).toBe(true);
     expect(res.body.items).toHaveLength(1);
     expect(res.body.items[0].skuSnapshot).toBe('SKU-001');

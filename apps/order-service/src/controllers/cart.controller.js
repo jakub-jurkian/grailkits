@@ -10,7 +10,7 @@ class CartController {
 
   async addLine(req, res) {
     try {
-      const userId = req.header('x-user-id') || req.body.userId;
+      const userId = req.header('x-user-id');
       const { variantId, quantity } = req.body;
       const cart = await this.cartService.addLine(userId, variantId, quantity);
       res.status(200).json(cart);
@@ -21,7 +21,7 @@ class CartController {
 
   async getCart(req, res) {
     try {
-      const userId = req.header('x-user-id') || req.query.userId;
+      const userId = req.header('x-user-id');
       const cart = await this.cartService.getCart(userId);
       res.status(200).json(cart);
     } catch (error) {
@@ -31,7 +31,7 @@ class CartController {
 
   async checkout(req, res) {
     try {
-      const userId = req.header('x-user-id') || req.body.userId;
+      const userId = req.header('x-user-id');
       const order = await this.cartService.checkout(userId);
       res.status(201).json(order);
     } catch (error) {

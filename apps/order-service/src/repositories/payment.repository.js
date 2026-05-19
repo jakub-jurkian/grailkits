@@ -1,9 +1,5 @@
 const prisma = require('../config/prisma');
 
-// Drives the Payment / PaymentEvent tables via PrismaClient.
-// This is the only repository in the project that uses Prisma; it satisfies
-// T4 by combining typed CRUD (create / findUnique with include / update),
-// a managed transaction ($transaction), and one tagged-template $queryRaw.
 class PaymentRepository {
   // CRUD: create. Inserts a Payment in PENDING and writes a STATUS_CHANGE
   // event so the audit trail starts on row one.
@@ -23,7 +19,7 @@ class PaymentRepository {
     });
   }
 
-  // CRUD: read with eager loading via `include` (T4 mentions include).
+  // CRUD: read with eager loading via `include`.
   async findById(id) {
     return await prisma.payment.findUnique({
       where: { id },
@@ -64,9 +60,6 @@ class PaymentRepository {
     });
   }
 
-  // T4: $queryRaw with a tagged template literal. The `${status}` value is
-  // automatically parameterised by Prisma's `sql` template tag — no string
-  // concatenation, no SQL-injection surface.
   async countByStatus(status) {
     const rows = await prisma.$queryRaw`
       SELECT COUNT(*)::int AS total
