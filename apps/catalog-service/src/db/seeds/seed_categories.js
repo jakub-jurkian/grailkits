@@ -1,7 +1,7 @@
 // Seed: Initial categories for GrailKits
 exports.seed = async function (knex) {
-  // Deleting existing entries to start fresh
-  await knex("categories").del();
+  // TRUNCATE resets the auto-increment sequence so IDs always start from 1
+  await knex.raw("TRUNCATE TABLE categories RESTART IDENTITY CASCADE");
 
   // Inserting professional categories for rare football shirts
   await knex("categories").insert([
