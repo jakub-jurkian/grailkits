@@ -1,6 +1,6 @@
 // Singleton PrismaClient for order-service. Used by the PaymentRepository to
 // drive the `Payment` and `PaymentEvent` tables (schema created by Prisma's
-// own migration history, see prisma/migrations/<ts>_init_payments).
+// own migration history).
 //
 // Coexists with Sequelize: Sequelize owns `carts`, `cart_lines`, `orders`,
 // `order_items`; Prisma owns `Payment` and `PaymentEvent`. The two sets are

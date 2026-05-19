@@ -1,5 +1,3 @@
-// GrailKits order-service Prisma schema.
-//
 // Prisma here owns a NEW, disjoint slice of the order-service PostgreSQL
 // database: `Payment` and `PaymentEvent`. The cart/orders tables are
 // owned and synced by Sequelize via `sync({ alter: true })`. There is

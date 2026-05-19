@@ -14,7 +14,7 @@ Order.init({
     allowNull: false
   },
   totalPrice: {
-    type: DataTypes.DECIMAL(10, 2),
+    type: DataTypes.INTEGER,
     allowNull: false
   },
   status: {
@@ -29,17 +29,21 @@ Order.init({
   hooks: {
     // Domain hook: runs before Sequelize's own validation so our error message
     // and statusCode reach the caller cleanly.
-    // 1. Normalise totalPrice to 2 decimal places.
-    // 2. Enforce the invariant: every order must have a positive total.
     beforeValidate: (order) => {
       // Only apply when totalPrice is explicitly present (skips partial updates
       // such as status-only changes where totalPrice is undefined).
       if (order.totalPrice === undefined || order.totalPrice === null) return;
 
-      // 1. Normalise to 2 decimal places.
-      order.totalPrice = Number(Number(order.totalPrice).toFixed(2));
+      // Coerce and validate integer grosze.
+      const normalized = Number(order.totalPrice);
+      if (!Number.isInteger(normalized)) {
+        const err = new Error('Order total must be an integer (grosze)');
+        err.statusCode = 400;
+        throw err;
+      }
+      order.totalPrice = normalized;
 
-      // 2. Domain invariant: every order must have a positive total.
+      // Domain invariant: every order must have a positive total.
       if (order.totalPrice <= 0) {
         const err = new Error('Order total must be greater than zero');
         err.statusCode = 400;

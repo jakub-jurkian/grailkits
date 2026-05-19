@@ -13,7 +13,7 @@ const OrderController = require('../controllers/order.controller');
 /**
  * Build an in-memory VariantRepository that never touches the DB.
  * `variantMap` is a plain object keyed by variantId — e.g.:
- *   { 'v-001': { id: 'v-001', product_id: 'p-001', price: '100.00', stock: 10, sku: 'SKU-001' } }
+ *   { 'v-001': { id: 'v-001', product_id: 'p-001', price: 10000, stock: 10, sku: 'SKU-001' } }
  *
  * The map is deep-cloned so mutations inside one test don't bleed into others.
  */
@@ -59,7 +59,7 @@ function createTestApp(variantMap = {}, overrideVariantRepo = null) {
   const orderService = new OrderService(orderRepo, variantRepo);
   const cartService = new CartService(cartRepo, variantRepo, orderRepo);
 
-  const orderController = new OrderController(orderService);
+  const orderController = new OrderController(orderService, cartService);
   const cartController = new CartController(cartService);
 
   // Order routes
