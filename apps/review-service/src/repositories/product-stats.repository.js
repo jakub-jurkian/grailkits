@@ -1,11 +1,13 @@
 const { getCatalogPool } = require('../config/pg');
+const { queryWithPgErrorMapping } = require('../utils/pg');
 
 // Writes denormalised review statistics to the products table in PostgreSQL.
 // Called by ReviewService after a review is approved in MongoDB.
 class ProductStatsRepository {
   async updateReviewStats(productId, { avgRating, reviewCount }) {
     const pool = getCatalogPool();
-    await pool.query(
+    await queryWithPgErrorMapping(
+      pool,
       `UPDATE products
           SET avg_rating   = $1,
               review_count = $2,
