@@ -493,14 +493,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorResponse'
     post:
-      summary: Create an order directly (bypasses cart — legacy path)
+      summary: Create an order from the open cart (alias of checkout)
+      description: |
+        Uses the authenticated user's open cart and runs the same checkout
+        flow as `/api/v1/checkout` (pessimistic locking, stock validation,
+        order + order_items snapshot). Requires `X-User-Id` header.
       tags: [Orders]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/DirectOrderRequest'
+      security:
+        - UserIdHeader: []
       responses:
         '201':
           description: Order created
@@ -509,7 +509,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/Order'
         '400':
-          description: Invalid payload
+          description: Cart is empty, not found, or missing X-User-Id
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Oversell — stock depleted during checkout
           content:
             application/json:
               schema:
@@ -811,6 +817,7 @@ paths:
       summary: Submit a product review
       description: |
         Creates a review with status `PENDING` (awaiting moderation).
+        Any client-supplied `status` is ignored and the server forces `PENDING`.
         A `pre('save')` hook appends the initial status to `moderationHistory`.
       tags: [Reviews]
       requestBody:
@@ -1299,8 +1306,8 @@ components:
         quantity:
           type: integer
         unitPrice:
-          type: number
-          description: Price in smallest currency unit at time of purchase (immutable)
+          type: integer
+          description: Price in smallest currency unit (grosze) at time of purchase (immutable)
       required: [id, orderId, productId, skuSnapshot, quantity, unitPrice]
 
     Order:
@@ -1312,8 +1319,8 @@ components:
         userId:
           type: string
         totalPrice:
-          type: number
-          description: Total in smallest currency unit
+          type: integer
+          description: Total in smallest currency unit (grosze)
         status:
           type: string
           enum: [PENDING, PAID, SHIPPED, CANCELLED]
@@ -1331,7 +1338,7 @@ components:
 
     DirectOrderRequest:
       type: object
-      description: Legacy direct order creation (bypasses cart flow)
+      description: Deprecated — use /api/v1/checkout with X-User-Id instead
       properties:
         userId:
           type: string
@@ -1371,7 +1378,8 @@ components:
     Review:
       type: object
       properties:
-        _id:
+                type: integer
+                description: Price in smallest currency unit (grosze)
           type: string
           description: MongoDB ObjectId
         productId:

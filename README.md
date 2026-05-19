@@ -77,7 +77,7 @@ Quick reference:
 - **Hybrid product creation** — `POST /api/v1/products` writes the relational row (pg) and then the document details (Mongo native driver). If the Mongo write fails, the PG row is deleted (compensation).
 - **Order snapshot** — `order_items` stores `skuSnapshot` and `unitPrice` at checkout time so order history is immutable even if catalog changes.
 - **Disjoint schema ownership** — three engines coexist in the order-service PostgreSQL database without conflict: Sequelize manages `orders / order_items / carts / cart_lines` via `sync({ alter: true })`; Prisma manages `Payment / PaymentEvent` via real migrations (`prisma migrate deploy` on a clean DB creates the tables on the first boot). The two sets are disjoint and `Payment.orderId` is a loose UUID without a FK at the schema level, so there is no startup ordering coupling.
-- **Prices in grosz** — stored as integers to avoid floating-point rounding errors.
+- **Prices in grosz** — stored as integers (catalog variants, order `totalPrice`, order item `unitPrice`, and payment `amount`) to avoid floating-point rounding errors.
 
 ## Data Flow (PostgreSQL / MongoDB)
 
