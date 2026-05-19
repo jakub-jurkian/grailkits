@@ -14,12 +14,15 @@ app.get("/health", (req, res) => {
 
 // Proxy Rules
 // Route requests to the Catalog Service
-// External prefix /api/v1/products maps 1:1 to catalog-service internal routes - no rewrite needed
 app.use(
   "/api/v1/products",
   createProxyMiddleware({
     target: process.env.CATALOG_SERVICE_URL,
     changeOrigin: true,
+    pathRewrite: (path) => {
+      if (path === "/" || path === "") return "/api/v1/products";
+      return `/api/v1/products${path}`;
+    },
   }),
 );
 
@@ -62,18 +65,15 @@ const orderProxy = createProxyMiddleware({
 app.use("/api/v1/orders", orderProxy);
 app.use("/api/v1/cart", orderProxy);
 app.use("/api/v1/checkout", orderProxy);
-
-// Route requests to the Order Service (Payment endpoints owned by Prisma).
-// External prefix /api/v1/payments maps 1:1 to the order-service internal
-// routes (GET /payments/count, GET /payments/:id, POST /payments/:id/authorize,
-// POST /payments/:id/fail) - no rewrite needed. The create-payment endpoint
-// is nested under /api/v1/orders/:id/payment and reaches order-service through
-// the existing orderProxy above, so no extra rule for it.
 app.use(
   "/api/v1/payments",
   createProxyMiddleware({
     target: process.env.ORDER_SERVICE_URL,
     changeOrigin: true,
+    pathRewrite: (path) => {
+      if (path === "/" || path === "") return "/api/v1/payments";
+      return `/api/v1/payments${path}`;
+    },
   }),
 );
 
