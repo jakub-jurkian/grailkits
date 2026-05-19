@@ -4,6 +4,7 @@ const cors = require("cors");
 
 const { sequelize, connectDB } = require("./config/db");
 const seedOrders = require("./db/seeds/seed_orders");
+const seedPayments = require("./db/seeds/seed_payments");
 const OrderRepository = require("./repositories/order.repository");
 const CartRepository = require("./repositories/cart.repository");
 const VariantRepository = require("./repositories/variant.repository");
@@ -36,16 +37,17 @@ const startServer = async () => {
 
   try {
     await seedOrders();
+    await seedPayments();
   } catch (err) {
     console.error('[Order Service] Seeding failed (non-fatal):', err.message);
   }
 
-  // DI - Sequelize-driven repos
+  // Sequelize-driven repos
   const orderRepository = new OrderRepository();
   const cartRepository = new CartRepository();
   const variantRepository = new VariantRepository();
 
-  // DI - Prisma-driven repo (T4)
+  // Prisma-driven repo
   const paymentRepository = new PaymentRepository();
 
   // Services

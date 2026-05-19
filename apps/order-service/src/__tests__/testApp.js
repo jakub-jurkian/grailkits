@@ -10,13 +10,6 @@ const OrderService = require('../services/order.service');
 const CartController = require('../controllers/cart.controller');
 const OrderController = require('../controllers/order.controller');
 
-/**
- * Build an in-memory VariantRepository that never touches the DB.
- * `variantMap` is a plain object keyed by variantId — e.g.:
- *   { 'v-001': { id: 'v-001', product_id: 'p-001', price: 10000, stock: 10, sku: 'SKU-001' } }
- *
- * The map is deep-cloned so mutations inside one test don't bleed into others.
- */
 function createMockVariantRepo(variantMap = {}) {
   // Deep clone so stock decrements are local to this instance
   const store = JSON.parse(JSON.stringify(variantMap));
