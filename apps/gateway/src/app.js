@@ -47,24 +47,41 @@ app.use(
   }),
 );
 
-// Route requests to the Order Service - orders, cart, and checkout
-const orderProxy = createProxyMiddleware({
-  target: process.env.ORDER_SERVICE_URL,
-  changeOrigin: true,
-  pathRewrite: (path) => {
-    const [pathname, qs] = path.split("?");
-    const query = qs ? `?${qs}` : "";
+// Route requests to the Order Service
+// Each mount needs its own proxy so pathRewrite can restore the correct prefix
+// (Express strips the mount path from req.url before passing to the middleware).
+app.use(
+  "/api/v1/orders",
+  createProxyMiddleware({
+    target: process.env.ORDER_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => {
+      if (path === "/" || path === "") return "/api/v1/orders";
+      return `/api/v1/orders${path}`;
+    },
+  }),
+);
 
-    if (pathname === "/" || pathname === "") {
-      return `/api/v1/orders${query}`;
-    }
-    return `/api/v1${pathname}${query}`;
-  },
-});
+app.use(
+  "/api/v1/cart",
+  createProxyMiddleware({
+    target: process.env.ORDER_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: (path) => {
+      if (path === "/" || path === "") return "/api/v1/cart";
+      return `/api/v1/cart${path}`;
+    },
+  }),
+);
 
-app.use("/api/v1/orders", orderProxy);
-app.use("/api/v1/cart", orderProxy);
-app.use("/api/v1/checkout", orderProxy);
+app.use(
+  "/api/v1/checkout",
+  createProxyMiddleware({
+    target: process.env.ORDER_SERVICE_URL,
+    changeOrigin: true,
+    pathRewrite: () => "/api/v1/checkout",
+  }),
+);
 app.use(
   "/api/v1/payments",
   createProxyMiddleware({
