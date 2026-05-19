@@ -2,7 +2,7 @@ const { getDb } = require('../config/mongo');
 
 const COLLECTION = 'product_details';
 
-class ProductDetailRepository {
+class ProductDetailMongoRepository {
   _col() {
     return getDb().collection(COLLECTION);
   }
@@ -59,4 +59,4 @@ class ProductDetailRepository {
   }
 }
 
-module.exports = ProductDetailRepository;
+module.exports = ProductDetailMongoRepository;

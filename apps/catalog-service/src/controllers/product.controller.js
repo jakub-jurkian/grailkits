@@ -33,10 +33,7 @@ class ProductController {
       const product = await this.productService.getProductById(id);
       res.status(200).json(product);
     } catch (error) {
-      if (error.message === 'PRODUCT_NOT_FOUND') {
-        const notFound = Object.assign(new Error('Product not found'), { statusCode: 404 });
-        return errorResponse(res, notFound);
-      }
+      console.error('[ProductController] Error fetching product details:', error);
       errorResponse(res, error);
     }
   }
@@ -61,7 +58,7 @@ class ProductController {
     }
   }
 
-  // T5: GET /api/v1/products/search?q=<term> - full-text search via $text/$search
+  // GET /api/v1/products/search?q=<term> - full-text search via $text/$search
   async searchProducts(req, res) {
     try {
       const results = await this.productService.searchProductsByText(req.query.q);
@@ -72,7 +69,7 @@ class ProductController {
     }
   }
 
-  // T5: PATCH /api/v1/products/:id/details - partial update via $set with whitelist
+  // PATCH /api/v1/products/:id/details - partial update via $set with whitelist
   async updateProductDetails(req, res) {
     try {
       const updated = await this.productService.updateProductDetails(req.params.id, req.body);

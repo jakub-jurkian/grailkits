@@ -1,7 +1,5 @@
 const { queryWithPgErrorMapping } = require("../utils/pg");
-const knex = require("knex")(
-  require("../../knexfile")[process.env.NODE_ENV || "development"],
-);
+const knex = require('../config/knex');
 
 class ProductRepository {
   constructor(dbPool) {

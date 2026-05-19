@@ -3,7 +3,7 @@ const express = require('express');
 
 const CategoryRepository = require('../repositories/category.repository');
 const ProductRepository = require('../repositories/product.repository');
-const ProductDetailsRepository = require('../repositories/product-details.repository');
+const ProductRelationalRepository = require('../repositories/product-relational.repository');
 const ProductService = require('../services/product.service');
 const ProductController = require('../controllers/product.controller');
 
@@ -27,8 +27,8 @@ function createTestApp(pool, mongoRepoOverride = {}) {
 
   const categoryRepo = new CategoryRepository(pool);
   const productRepo = new ProductRepository(pool);
-  const productDetailsRepo = new ProductDetailsRepository(pool);
-  const productService = new ProductService(productRepo, productDetailsRepo, mongoRepo);
+  const productRelationalRepo = new ProductRelationalRepository(pool);
+  const productService = new ProductService(productRepo, productRelationalRepo, mongoRepo);
   const productController = new ProductController(productService);
 
   app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));

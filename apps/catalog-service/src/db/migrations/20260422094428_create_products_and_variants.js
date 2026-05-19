@@ -24,8 +24,8 @@ exports.up = async function(knex) {
          
     table.string('size').notNullable(); // e.g., 'S', 'M', 'L'
     table.integer('price').notNullable(); // Price in grosze (e.g. 29900 = 299.00 PLN)
-    table.integer('stock').notNullable().defaultTo(0);
-    table.string('sku').unique().notNullable(); // Stock Keeping Unit
+    table.integer('stock').notNullable().defaultTo(0); // e.g. 2
+    table.string('sku').unique().notNullable(); // Stock Keeping Unit (e.g. BARCA-HOME-M)
     
     table.timestamps(true, true);
   });

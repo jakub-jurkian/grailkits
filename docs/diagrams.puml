@@ -1,0 +1,581 @@
+' =============================================================================
+'  GrailKits - PlantUML diagrams
+'  Six diagrams covering: architecture, ER model, deployment, and three
+'  critical sequences (checkout, hybrid product creation, review write-back).
+' =============================================================================
+
+@startuml grailkits_architecture
+title GrailKits - Component & Data Stores
+
+skinparam componentStyle rectangle
+skinparam shadowing false
+skinparam defaultFontName "Inter, Helvetica, Arial"
+
+actor "Client\n(curl, Postman, frontend)" as Client
+
+node "Docker Compose" {
+
+  component "API Gateway\n:3000\n(Express + http-proxy-middleware)" as GW
+
+  component "catalog-service\n:3001" as CAT {
+    [Routes\n/products, /products/:id\n/products/categories\n/products/count\n/products/search\n/products/:id/details] as CAT_ROUTES
+    [ProductService\nProductController] as CAT_SVC
+    [ProductRepository\n(Knex query builder)] as CAT_KNEX
+    [ProductDetailsRepository\n(pg + LEFT JOIN)] as CAT_PG
+    [CategoryRepository\n(pg)] as CAT_CAT
+    [ProductDetailRepository\n(Mongo native driver)] as CAT_MONGO
+  }
+
+  component "order-service\n:3003" as ORD {
+    [Routes\n/cart, /cart/lines\n/checkout\n/orders, /orders/:id\n/orders/:id/cancel\n/orders/:id/payment\n/payments/*] as ORD_ROUTES
+    [OrderService\nCartService\nPaymentService] as ORD_SVC
+    [OrderRepository\nCartRepository\nVariantRepository\n(Sequelize ORM + raw SQL)] as ORD_SEQ
+    [PaymentRepository\n(Prisma typed CRUD\n+ $transaction\n+ $queryRaw)] as ORD_PRISMA
+  }
+
+  component "review-service\n:3002" as REV {
+    [Routes\n/reviews\n/reviews/product/:id\n/reviews/approved\n/reviews/analytics/avg-rating\n/reviews/:id/moderate] as REV_ROUTES
+    [ReviewService\nReviewController] as REV_SVC
+    [ReviewRepository\n(Mongoose + aggregation)] as REV_MONGOOSE
+    [ProductStatsRepository\n(pg write-back)] as REV_PG
+  }
+
+  database "PostgreSQL 16\n:5432" as PG {
+    folder "Knex-managed\n(catalog domain)" as PG_KNEX {
+      [categories]
+      [products]
+      [variants]
+    }
+    folder "Sequelize-managed\n(order domain)" as PG_SEQ {
+      [carts]
+      [cart_lines]
+      [orders]
+      [order_items]
+    }
+    folder "Prisma-managed\n(payments domain)" as PG_PRISMA {
+      [Payment]
+      [PaymentEvent]
+    }
+  }
+
+  database "MongoDB 7\n:27017" as MONGO {
+    [product_details\n(native driver writes,\nMongoose read-only populate)] as MONGO_PD
+    [reviews\n(Mongoose)] as MONGO_REV
+  }
+}
+
+' --- Client traffic ---
+Client -> GW : HTTP
+
+' --- Gateway proxy rules ---
+GW --> CAT_ROUTES   : /api/v1/products/*
+GW --> REV_ROUTES   : /api/v1/reviews/*
+GW --> ORD_ROUTES   : /api/v1/orders/*\n/api/v1/cart/*\n/api/v1/checkout\n/api/v1/payments/*
+
+' --- catalog-service internals ---
+CAT_ROUTES --> CAT_SVC
+CAT_SVC --> CAT_KNEX
+CAT_SVC --> CAT_PG
+CAT_SVC --> CAT_CAT
+CAT_SVC --> CAT_MONGO
+
+' --- order-service internals ---
+ORD_ROUTES --> ORD_SVC
+ORD_SVC --> ORD_SEQ
+ORD_SVC --> ORD_PRISMA
+
+' --- review-service internals ---
+REV_ROUTES --> REV_SVC
+REV_SVC --> REV_MONGOOSE
+REV_SVC --> REV_PG
+
+' --- Data store access ---
+CAT_KNEX --> PG_KNEX
+CAT_PG --> PG_KNEX
+CAT_CAT --> PG_KNEX
+ORD_SEQ --> PG_SEQ
+ORD_PRISMA --> PG_PRISMA
+REV_PG --> PG_KNEX : "UPDATE products\nSET avg_rating,\nreview_count\n(hybrid write-back)"
+
+CAT_MONGO --> MONGO_PD
+REV_MONGOOSE --> MONGO_REV
+REV_MONGOOSE ..> MONGO_PD : virtual populate\n(read-only)
+
+@enduml
+
+
+@startuml grailkits_er_model
+title GrailKits - Entity-Relationship Model (PG + Mongo)
+
+skinparam shadowing false
+skinparam linetype ortho
+hide circle
+
+' =====  PostgreSQL  =====
+package "PostgreSQL (Knex)" {
+  entity categories {
+    * id : SERIAL <<PK>>
+    --
+    * name : VARCHAR UNIQUE
+    * created_at : TIMESTAMPTZ
+    * updated_at : TIMESTAMPTZ
+  }
+  entity products {
+    * id : UUID <<PK>>
+    --
+    * category_id : INT <<FK>>
+    * name : VARCHAR
+    * brand : VARCHAR
+    description : TEXT
+    * review_count : INT
+    avg_rating : DECIMAL(3,2)
+    * created_at : TIMESTAMPTZ
+    * updated_at : TIMESTAMPTZ
+  }
+  entity variants {
+    * id : UUID <<PK>>
+    --
+    * product_id : UUID <<FK>>
+    * size : VARCHAR
+    * price : INT  (grosze)
+    * stock : INT
+    * sku : VARCHAR UNIQUE
+    * created_at : TIMESTAMPTZ
+    * updated_at : TIMESTAMPTZ
+  }
+}
+
+package "PostgreSQL (Sequelize)" {
+  entity carts {
+    * id : UUID <<PK>>
+    --
+    * userId : VARCHAR
+    * status : ENUM (OPEN/CHECKED_OUT/CANCELLED)
+    * createdAt : DATE
+    * updatedAt : DATE
+  }
+  entity cart_lines {
+    * id : UUID <<PK>>
+    --
+    * cartId : UUID <<FK>>
+    * productId : VARCHAR
+    * variantId : VARCHAR
+    * quantity : INT (>=1)
+  }
+  entity orders {
+    * id : UUID <<PK>>
+    --
+    * userId : VARCHAR
+    * totalPrice : DECIMAL(10,2)
+    * status : ENUM (PENDING/PAID/SHIPPED/CANCELLED)
+    * createdAt : DATE
+  }
+  entity order_items {
+    * id : UUID <<PK>>
+    --
+    * orderId : UUID <<FK>>
+    * productId : VARCHAR
+    variantId : VARCHAR
+    * skuSnapshot : VARCHAR  '' frozen at checkout
+    * quantity : INT (>=1)
+    * unitPrice : DECIMAL(10,2)  '' frozen at checkout
+  }
+}
+
+package "PostgreSQL (Prisma)" {
+  entity Payment {
+    * id : UUID <<PK>>
+    --
+    * orderId : UUID  '' loose ref, no FK
+    * amount : INT (grosze)
+    * method : VARCHAR (CARD/TRANSFER/BLIK)
+    * status : VARCHAR (PENDING/AUTHORIZED/FAILED/REFUNDED)
+    * createdAt : TIMESTAMPTZ
+    * updatedAt : TIMESTAMPTZ
+  }
+  entity PaymentEvent {
+    * id : UUID <<PK>>
+    --
+    * paymentId : UUID <<FK>>
+    * type : VARCHAR
+    payload : JSONB
+    * createdAt : TIMESTAMPTZ
+  }
+}
+
+' =====  MongoDB  =====
+package "MongoDB" {
+  entity product_details <<document>> {
+    _id : ObjectId
+    --
+    * productId : String (UUID, unique)
+    * longDescription : String  '' text index
+    specs : Map<String,String>
+    gallery : [String]  '' URLs
+    createdAt : Date
+    updatedAt : Date
+  }
+  entity reviews <<document>> {
+    _id : ObjectId
+    --
+    * productId : String  '' indexed
+    * userId : String
+    * rating : Number 1..5
+    * title : String
+    * body : String  '' XSS guard
+    * status : ENUM (PENDING/APPROVED/REJECTED)
+    moderationHistory : [SubDoc]
+    createdAt : Date
+    updatedAt : Date
+  }
+  entity ModerationEntry <<subdocument>> {
+    * status : ENUM
+    moderatorId : String
+    reason : String
+    * createdAt : Date
+  }
+}
+
+' --- Relations ---
+categories ||--o{ products : "ON DELETE CASCADE"
+products   ||--o{ variants : "ON DELETE CASCADE"
+
+carts      ||--o{ cart_lines : "hasMany"
+orders     ||--o{ order_items : "hasMany"
+
+Payment    ||--o{ PaymentEvent : "ON DELETE CASCADE"
+
+reviews    ||--o{ ModerationEntry : "nested array"
+
+' --- Cross-store loose references (no FK) ---
+products  ..> product_details : "productId\n(virtual populate / native $eq)"
+products  ..> reviews         : "productId\n(virtual populate)"
+orders    ..> Payment         : "orderId\n(app-level check)"
+order_items ..> variants      : "variantId\n(snapshot only;\nno FK enforcement)"
+
+@enduml
+
+
+@startuml grailkits_deployment
+title GrailKits - Deployment View (Docker Compose)
+
+skinparam shadowing false
+skinparam node {
+  BackgroundColor #f8f8f8
+}
+
+node "Host machine" {
+
+  node "Docker network: default" as net {
+
+    node "gateway\n(node:20-alpine)" as gw_node {
+      artifact "/app/src" as gw_src
+      port "3000:3000" as gw_port
+    }
+
+    node "catalog-service\n(node:20-alpine, multi-stage)" as cat_node {
+      artifact "/app/src\nKnex migrations + seeds" as cat_src
+      port "3001:3001" as cat_port
+    }
+
+    node "order-service\n(node:20-alpine, multi-stage)" as ord_node {
+      artifact "/app/src" as ord_src
+      artifact "/app/prisma\nmigrations + schema" as ord_prisma
+      port "3003:3003" as ord_port
+    }
+
+    node "review-service\n(node:20-alpine, multi-stage)" as rev_node {
+      artifact "/app/src" as rev_src
+      port "3002:3002" as rev_port
+    }
+
+    database "postgres:16-alpine" as pg_node {
+      port "5432:5432"
+      folder "/var/lib/postgresql/data\n(volume: postgres_data)"
+      folder "/docker-entrypoint-initdb.d/\ninit-test-db.sql\n(creates grailkits_test)"
+    }
+
+    database "mongo:7" as mg_node {
+      port "27017:27017"
+      folder "/data/db\n(volume: mongo_data)"
+    }
+  }
+}
+
+' --- Healthcheck dependencies (depends_on: service_healthy) ---
+gw_node ..> cat_node : depends_on\nservice_healthy
+gw_node ..> ord_node : depends_on\nservice_healthy
+gw_node ..> rev_node : depends_on\nservice_healthy
+
+cat_node ..> pg_node  : depends_on\nservice_healthy
+cat_node ..> mg_node  : depends_on\nservice_healthy
+ord_node ..> pg_node  : depends_on\nservice_healthy
+rev_node ..> mg_node  : depends_on\nservice_healthy
+rev_node ..> pg_node  : depends_on\nservice_healthy
+
+' --- Boot-time DDL ---
+note right of cat_node
+  CMD: npm start
+  Boot does:
+   1. knex.migrate.latest()
+   2. knex.seed.run()
+   3. connectMongo() + indexes
+   4. seedProductDetails()
+end note
+
+note right of ord_node
+  CMD: prisma migrate deploy && npm start
+   1. Prisma applies Payment + PaymentEvent DDL
+   2. sequelize.sync({ alter: true })
+   3. seedOrders()
+end note
+
+@enduml
+
+
+@startuml grailkits_checkout_sequence
+title Checkout flow - PESSIMISTIC LOCKING anti-oversell
+
+skinparam shadowing false
+skinparam sequenceMessageAlign center
+
+actor Client
+participant "Gateway\n:3000" as GW
+participant "order-service\n:3003" as ORD
+participant "CartService" as CS
+database "PostgreSQL\n(Sequelize-managed)" as PG
+
+Client -> GW : POST /api/v1/checkout\nX-User-Id: user-001
+GW -> ORD : POST /api/v1/checkout
+
+ORD -> CS : checkout(userId)
+activate CS
+
+CS -> PG : BEGIN TRANSACTION
+note right of PG
+  Sequelize-managed transaction
+  (sequelize.transaction(async tx => ...))
+end note
+
+CS -> PG : SELECT * FROM carts\nWHERE userId=? AND status='OPEN'\nINCLUDE cart_lines
+PG --> CS : Cart{ lines: [v-001 x2, v-002 x1] }
+
+alt cart is empty
+  CS --> ORD : throw 400 BAD_REQUEST
+  ORD --> GW : 400 { error, code, details }
+  GW --> Client : 400
+end
+
+loop for each cart_line
+  CS -> PG : SELECT id, stock, price, sku\nFROM variants\nWHERE id=?\n**FOR UPDATE**
+  note right of PG
+    PostgreSQL takes a
+    ROW-LEVEL EXCLUSIVE LOCK
+    on this variant.
+    Other concurrent FOR UPDATE
+    queries on the same row
+    BLOCK until COMMIT/ROLLBACK.
+  end note
+  PG --> CS : variant{ stock, price, sku }
+
+  alt stock < line.quantity
+    CS -> PG : ROLLBACK
+    note right of CS : Frees the lock
+    CS --> ORD : throw 409 CONFLICT\n"Insufficient stock for checkout"
+    ORD --> GW : 409
+    GW --> Client : 409 CONFLICT
+  end
+
+  CS -> PG : UPDATE variants\nSET stock=stock-?\nWHERE id=?
+  CS -> CS : push orderItem with\n**skuSnapshot** + **unitPrice**\n(frozen at checkout)
+end
+
+CS -> PG : INSERT INTO orders (...)\nRETURNING *
+CS -> PG : INSERT INTO order_items (...)
+CS -> PG : UPDATE carts\nSET status='CHECKED_OUT'\nWHERE id=?
+
+CS -> PG : COMMIT
+note right of PG : All row locks released atomically
+
+CS --> ORD : Order{ id, status: PENDING, items[] }
+deactivate CS
+
+ORD --> GW : 201 Created
+GW --> Client : 201 Order created
+
+@enduml
+
+
+@startuml grailkits_hybrid_create_sequence
+title Hybrid product creation - PG + Mongo with COMPENSATION
+
+skinparam shadowing false
+
+actor Client
+participant "Gateway" as GW
+participant "catalog-service" as CAT
+participant "ProductService" as PS
+database "PostgreSQL\n(pg driver)" as PG
+database "MongoDB\n(native driver)" as MG
+
+Client -> GW : POST /api/v1/products\n{ name, brand, categoryId,\n  longDescription, specs, gallery }
+GW -> CAT : POST /api/v1/products
+CAT -> PS : createProduct(data)
+activate PS
+
+== Step 1: write the relational part ==
+PS -> PG : INSERT INTO products\n(name, brand, description, category_id)\nRETURNING *
+alt pg error 23503 (FK invalid)
+  PG --> PS : Error 23503
+  PS --> CAT : throw mapped 400
+  CAT --> GW : 400 { code: BAD_REQUEST }
+  GW --> Client : 400
+end alt
+PG --> PS : Product{ id: pId, ... }
+
+== Step 2: write the document part ==
+PS -> MG : insertOne(product_details, {\n  productId: pId, longDescription,\n  specs, gallery })
+
+alt Mongo write succeeds
+  MG --> PS : insertedId
+  PS --> CAT : merged Product{ +longDescription,\n  +specs, +gallery }
+  CAT --> GW : 201 Created
+  GW --> Client : 201
+
+else Mongo write fails
+  MG --> PS : MongoError (e.g. connection refused)
+  note right of PS
+    COMPENSATION step:
+    the PG row already exists,
+    but Mongo never got it.
+    Remove the PG row to keep
+    the two stores consistent.
+  end note
+  PS -> PG : DELETE FROM products\nWHERE id = pId
+
+  alt compensation also fails
+    PG --> PS : pg error
+    note right of PS
+      Manual cleanup needed.
+      Logged with productId
+      for ops team.
+    end note
+  else compensation succeeds
+    PG --> PS : 1 row deleted
+  end alt
+
+  PS --> CAT : throw 503\n{ code: MONGO_WRITE_FAILED,\n  details: original error }
+  CAT --> GW : 503 Service Unavailable
+  GW --> Client : 503
+end alt
+
+deactivate PS
+
+@enduml
+
+
+@startuml grailkits_review_writeback_sequence
+title Review moderation - hybrid Mongo + PG with COMPENSATION
+
+skinparam shadowing false
+
+actor Moderator
+participant "Gateway" as GW
+participant "review-service" as REV
+participant "ReviewService" as RS
+participant "ReviewRepository" as RR
+database "MongoDB\n(Mongoose)" as MG
+participant "ProductStatsRepository" as PSR
+database "PostgreSQL\n(pg)" as PG
+
+Moderator -> GW : PATCH /api/v1/reviews/:id/moderate\n{ status: APPROVED, moderatorId, reason }
+GW -> REV : PATCH /api/v1/reviews/:id/moderate
+REV -> RS : moderateReview(id, payload)
+activate RS
+
+RS -> RR : findById(id)
+RR -> MG : Review.findById(id)
+MG --> RR : Review{ status: PENDING, ... }
+
+alt status != PENDING
+  RS --> REV : throw 409 CONFLICT
+  REV --> GW : 409
+  GW --> Moderator : 409
+end alt
+
+== Step 1: Mongo update ==
+RS -> RR : moderateReview(id, payload)
+RR -> MG : update review.status,\npush moderationHistory entry
+MG --> RR : Review{ status: APPROVED }
+RR --> RS : updated review
+
+opt status == APPROVED && PG repo wired
+  == Step 2: aggregation in MongoDB ==
+  RS -> RR : aggregateAvgRatingPerProduct(productId)
+  RR -> MG : $match -> $group -> $project ($avg, $sum)
+  MG --> RR : { avgRating, reviewCount }
+  RR --> RS : stats
+
+  == Step 3: PG write-back ==
+  RS -> PSR : updateReviewStats(productId, stats)
+  PSR -> PG : UPDATE products\nSET avg_rating=?, review_count=?\nWHERE id=?
+
+  alt PG write succeeds
+    PG --> PSR : 1 row
+    PSR --> RS : ok
+    RS --> REV : updated review
+    REV --> GW : 200 OK
+    GW --> Moderator : 200
+
+  else PG write fails
+    PG --> PSR : error
+    PSR --> RS : throw pgError
+    note right of RS
+      COMPENSATION:
+      revert Mongo status back to PENDING
+      so the two stores stay consistent.
+      Append moderationHistory entry
+      marking the revert.
+    end note
+    RS -> RR : moderateReview(id,\n  { status: PENDING,\n    reason: "Compensation: ..." })
+    RR -> MG : update + push history
+    MG --> RR : reverted
+    RS --> REV : throw 503\n{ code: INTERNAL_ERROR }
+    REV --> GW : 503
+    GW --> Moderator : 503
+  end alt
+end opt
+
+deactivate RS
+
+@enduml
+
+
+@startuml grailkits_analytics_sequence
+title Analytics endpoint - aggregation pipeline in MongoDB (T7)
+
+skinparam shadowing false
+
+actor Client
+participant "Gateway" as GW
+participant "review-service" as REV
+database "MongoDB\n(reviews collection)" as MG
+
+Client -> GW : GET /api/v1/reviews/analytics/avg-rating[?productId=]
+GW -> REV : same path
+
+REV -> MG : Review.aggregate([\n  {$match: {status:'APPROVED', productId?}},\n  {$group: {_id:'$productId',\n            avgRating: {$avg:'$rating'},\n            reviewCount: {$sum:1}}},\n  {$project: {_id:0, productId:'$_id',\n              avgRating: {$round:[...,2]},\n              reviewCount:1}},\n  {$lookup: {from:'product_details',\n             localField:'productId',\n             foreignField:'productId',\n             as:'productDetails'}},\n  {$unwind: {path:'$productDetails',\n             preserveNullAndEmptyArrays:true}},\n  {$sort: {avgRating:-1, reviewCount:-1}}\n])
+
+note right of MG
+  First $match hits the
+  compound index
+  { status:1, productId:1 }.
+  $lookup uses unique index
+  on product_details.productId.
+end note
+
+MG --> REV : [{ productId, avgRating,\n   reviewCount, productDetails }, ...]
+REV --> GW : 200 OK
+GW --> Client : 200
+
+@enduml
