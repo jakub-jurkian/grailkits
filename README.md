@@ -5,21 +5,22 @@ E-commerce backend for limited football kits. API Gateway + three domain microse
 ## Architecture
 
 ```
-                       Client
-                         |
-                         v
-                    Gateway :3000
-            /         |          \
-           v          v           v
-        Catalog    Review       Order
-        Service    Service      Service
-        :3001      :3002        :3003
-           |          |            |
-           v          v          /   \
-       PostgreSQL  MongoDB     PG     PG
-       (pg / Knex) (Mongoose)  Sequelize  Prisma
-                              (orders,  (payments,
-                              cart)      payment_events)
+                        Client
+                          |
+                          v
+                     Gateway :3000
+             /            |            \
+            v             v             v
+        Catalog        Review          Order
+        Service        Service         Service
+        :3001          :3002           :3003
+       /       \      /       \       /       \
+      v         v    v         v     v         v
+  PostgreSQL  MongoDB  MongoDB  PostgreSQL  PostgreSQL  PostgreSQL
+  (pg+Knex)  (native  (Mongoose (pg write- (Sequelize)  (Prisma)
+  categories  driver)  reviews)  back:      orders/      Payment/
+  products   product_           avg_rating  cart)        PaymentEvent
+  variants   details)
 ```
 
 | Service | Responsibility |
@@ -35,7 +36,7 @@ E-commerce backend for limited football kits. API Gateway + three domain microse
 |------------|------------|
 | Runtime    | Node.js 20 + Express 5 |
 | PostgreSQL | `pg` (raw pool + error code mapping 23505/23503 → 409/400) in catalog-service and review-service; **Knex 3** in catalog-service (schema migrations, dynamic where, seeds); **Sequelize v6** in order-service (orders / cart / cart_lines, managed transactions, pessimistic locking via raw `SELECT ... FOR UPDATE`); **Prisma 6** in order-service (typed CRUD on `Payment`/`PaymentEvent`, managed `$transaction`, tagged-template `$queryRaw`) |
-| MongoDB    | MongoDB native driver (`product_details` collection in catalog-service — singleton `MongoClient`, SIGINT close, `$eq`/`$text`/`$set` operators, text index); Mongoose 9 (`reviews` in review-service — custom validators, pre-save hook, statics, virtual populate, aggregation pipeline with `$match`/`$group`/`$project`/`$lookup`) |
+| MongoDB    | MongoDB native driver (`product_details` collection in catalog-service — singleton `MongoClient`, SIGINT close, `$eq`/`$in`/`$text`/`$set` operators, unique index on `productId`, text index on `longDescription`); Mongoose 9 (`reviews` in review-service — custom validators, pre-save hook, statics, virtual populate, aggregation pipeline with `$match`/`$group`/`$project`/`$lookup`) |
 | Infra      | Docker, Docker Compose, PostgreSQL 16, MongoDB 7, multi-stage Dockerfiles, healthchecks with `depends_on: service_healthy` |
 
 ## API Routes
@@ -83,7 +84,7 @@ Quick reference:
 
 **PostgreSQL** stores the relational core. In catalog-service, Knex manages the schema (categories / products / variants) via migrations and seeds; the `pg` pool drives reads and the hybrid create/delete in `ProductService`. In order-service, Sequelize manages `orders` / `order_items` / `carts` / `cart_lines` with pessimistic locking (`SELECT ... FOR UPDATE`) and managed transactions; Prisma additionally manages `Payment` / `PaymentEvent` through typed CRUD with `include`, managed `$transaction`, and one tagged-template `$queryRaw` for `countByStatus`.
 
-**MongoDB** stores documents that benefit from flexible schemas — `product_details` (long description, specs map, image gallery) and `reviews` (rating, body, moderation history). The `product_details` collection is owned and written by `catalog-service` through the **MongoDB native driver** (singleton `MongoClient` with `SIGINT` close, text index on `longDescription`, compound `productId+createdAt` index, three operators in real endpoints: `$eq`, `$text`, `$set`); `review-service` uses **Mongoose** to manage `reviews` (custom validators, pre-save hook, statics, virtual populate of `product_details`, aggregation pipeline for analytics).
+**MongoDB** stores documents that benefit from flexible schemas — `product_details` (long description, specs map, image gallery) and `reviews` (rating, body, moderation history). The `product_details` collection is owned and written by `catalog-service` through the **MongoDB native driver** (singleton `MongoClient` with `SIGINT` close, unique index on `productId`, text index on `longDescription`, four operators in real endpoints: `$eq`, `$in`, `$text`, `$set`); `review-service` uses **Mongoose** to manage `reviews` (custom validators, pre-save hook, statics, virtual populate of `product_details`, aggregation pipeline for analytics).
 
 **Hybrid writes**:
 - *Product creation* — pg insert (catalog-service) + Mongo `insertOne` (native driver). On Mongo failure, the pg row is deleted (compensation).
