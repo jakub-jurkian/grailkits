@@ -8,7 +8,12 @@ class ReviewService {
   }
 
   async addReview(data) {
-    return await this.reviewRepository.create(data);
+    const payload = {
+      ...data,
+      status: 'PENDING',
+    };
+    delete payload.moderationHistory;
+    return await this.reviewRepository.create(payload);
   }
 
   async getReviewsForProduct(productId) {

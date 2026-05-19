@@ -12,7 +12,14 @@ class ReviewController {
 
   async createReview(req, res) {
     try {
-      const review = await this.reviewService.addReview(req.body);
+      const body = req.body || {};
+      const review = await this.reviewService.addReview({
+        productId: body.productId,
+        userId: body.userId,
+        rating: body.rating,
+        title: body.title,
+        body: body.body,
+      });
       res.status(201).json(review);
     } catch (error) {
       console.error('[ReviewController] Error creating review:', error);

@@ -10,7 +10,6 @@ const VALID_REVIEW = {
   rating: 5,
   title: 'Absolute grail',
   body: 'One of the finest shirts I have ever owned. Worth every penny.',
-  status: 'APPROVED',
 };
 
 beforeAll(async () => {
@@ -67,7 +66,7 @@ describe('POST /api/v1/reviews', () => {
     const res = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
     expect(res.status).toBe(201);
     expect(res.body.moderationHistory).toHaveLength(1);
-    expect(res.body.moderationHistory[0].status).toBe('APPROVED');
+    expect(res.body.moderationHistory[0].status).toBe('PENDING');
   });
 });
 
@@ -110,8 +109,15 @@ describe('GET /api/v1/reviews/product/:productId', () => {
 
 describe('GET /api/v1/reviews/analytics/avg-rating', () => {
   it('returns 200 with aggregated avg rating per product', async () => {
-    await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, rating: 4 });
-    await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, rating: 2 });
+    const first = await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, rating: 4 });
+    const second = await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, rating: 2 });
+
+    await request(app)
+      .patch(`/api/v1/reviews/${first.body._id}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Ok' });
+    await request(app)
+      .patch(`/api/v1/reviews/${second.body._id}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Ok' });
 
     const res = await request(app)
       .get('/api/v1/reviews/analytics/avg-rating');
@@ -123,7 +129,10 @@ describe('GET /api/v1/reviews/analytics/avg-rating', () => {
   });
 
   it('filters by productId when provided as query param', async () => {
-    await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    await request(app)
+      .patch(`/api/v1/reviews/${created.body._id}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Ok' });
     await request(app).post('/api/v1/reviews').send({
       ...VALID_REVIEW,
       productId: 'a0000000-0000-0000-0000-000000000002',
@@ -142,8 +151,11 @@ describe('GET /api/v1/reviews/analytics/avg-rating', () => {
 
 describe('GET /api/v1/reviews/approved', () => {
   it('returns only APPROVED reviews', async () => {
-    await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, status: 'APPROVED' });
-    await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, status: 'PENDING' });
+    const created = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    await request(app)
+      .patch(`/api/v1/reviews/${created.body._id}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Looks good' });
+    await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
 
     const res = await request(app).get('/api/v1/reviews/approved');
 
@@ -153,7 +165,10 @@ describe('GET /api/v1/reviews/approved', () => {
   });
 
   it('filters by productId when provided', async () => {
-    await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    await request(app)
+      .patch(`/api/v1/reviews/${created.body._id}/moderate`)
+      .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Ok' });
     await request(app).post('/api/v1/reviews').send({
       ...VALID_REVIEW,
       productId: 'a0000000-0000-0000-0000-000000000002',
@@ -177,7 +192,6 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
     rating: 4,
     title: 'Great kit',
     body: 'Arrived on time and fits well.',
-    status: 'PENDING',
   };
 
   it('approves a PENDING review and returns 200 with APPROVED status', async () => {
