@@ -1,11 +1,6 @@
 const { queryWithPgErrorMapping } = require('../utils/pg');
 
-// pg-based replacement for what used to be a Prisma-backed repository.
-// The shape returned by findById / create is intentionally kept compatible
-// with Prisma's findUnique({ include: { categories, variants } }) and
-// create({ data, categories: { connect: ... } }) so the rest of the service
-// layer and the public API contract do not change.
-class ProductDetailsRepository {
+class ProductRelationalRepository {
   constructor(dbPool) {
     this.dbPool = dbPool;
   }
@@ -80,8 +75,7 @@ class ProductDetailsRepository {
     return product;
   }
 
-  // Inserts a row into products and returns the full row (same shape callers
-  // expected from Prisma's create()).
+  // Inserts a row into products and returns the full row.
   // Accepts { name, brand, description, categoryId } — categoryId is mapped to
   // the category_id column so the service layer keeps its current contract.
   async create(productData) {
@@ -116,4 +110,4 @@ class ProductDetailsRepository {
   }
 }
 
-module.exports = ProductDetailsRepository;
+module.exports = ProductRelationalRepository;

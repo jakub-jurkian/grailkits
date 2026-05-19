@@ -1,6 +1,3 @@
-// Whitelist of fields that PATCH /products/:id/details is allowed to write to
-// the MongoDB product_details collection. Anything else (including Mongo
-// query operators) is silently dropped before reaching the native driver.
 const ALLOWED_DETAIL_FIELDS = ['longDescription', 'specs', 'gallery'];
 
 class ProductService {
@@ -17,7 +14,9 @@ class ProductService {
   async getProductById(id) {
     const product = await this.productDetailsRepository.findById(id);
     if (!product) {
-      throw new Error('PRODUCT_NOT_FOUND');
+      const err = new Error('Product not found');
+      err.statusCode = 404;
+      throw err;
     }
     try {
       const details = await this.productDetailMongoRepository.findByProductId(id);

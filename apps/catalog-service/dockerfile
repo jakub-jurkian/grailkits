@@ -20,5 +20,4 @@ COPY --from=builder /app/knexfile.js ./knexfile.js
 EXPOSE 3001
 
 # Schema is created by Knex migrations inside npm start (knex.migrate.latest()).
-# No Prisma in catalog-service anymore - Prisma now lives in order-service.
 CMD ["npm", "start"]
