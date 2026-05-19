@@ -33,6 +33,9 @@ app.use(
       const [pathname, qs] = path.split("?");
       const query = qs ? `?${qs}` : "";
 
+      if (pathname.startsWith("/api/v1/reviews")) {
+        return `${pathname}${query}`;
+      }
       if (pathname === "/" || pathname === "") {
         return `/api/v1/reviews${query}`;
       }

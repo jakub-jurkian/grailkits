@@ -25,13 +25,6 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'Order Service is operational' });
 });
 
-// Start listening immediately so the health check can pass
-// while DB sync runs in the background
-const PORT = process.env.PORT || 3003;
-app.listen(PORT, () => {
-  console.log(`[Order Service] Server is running on port ${PORT}`);
-});
-
 const startServer = async () => {
   await connectDB();
 
@@ -87,6 +80,11 @@ const startServer = async () => {
   app.get("/api/v1/payments/:id", paymentController.getById);
   app.post("/api/v1/payments/:id/authorize", paymentController.authorize);
   app.post("/api/v1/payments/:id/fail", paymentController.markFailed);
+
+  const PORT = process.env.PORT || 3003;
+  app.listen(PORT, () => {
+    console.log(`[Order Service] Server is running on port ${PORT}`);
+  });
 };
 
 startServer().catch((err) => {
