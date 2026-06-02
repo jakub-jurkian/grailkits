@@ -7,8 +7,6 @@ services:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: rootpassword
       POSTGRES_DB: grailkits_db
-    ports:
-      - "5432:5432"
     healthcheck:
       test: [ "CMD-SHELL", "pg_isready -U root -d grailkits_db" ]
       interval: 5s
@@ -17,6 +15,8 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    networks: 
+      - internal-net
 
   mongo:
     image: mongo:7
@@ -25,8 +25,6 @@ services:
     environment:
       MONGO_INITDB_ROOT_USERNAME: root
       MONGO_INITDB_ROOT_PASSWORD: rootpassword
-    ports:
-      - "27017:27017"
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 5s
@@ -34,10 +32,11 @@ services:
       retries: 5
     volumes:
       - mongo_data:/data/db
+    networks:
+      - internal-net
 
   gateway:
     build: ./apps/gateway
-    ports: [ "3000:3000" ]
     environment:
       - PORT=3000
       - CATALOG_SERVICE_URL=http://catalog-service:3001
@@ -59,9 +58,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: 
+      - internal-net
+      - external-net
   catalog-service:
     build: ./apps/catalog-service
-    ports: [ "3001:3001" ]
     environment:
       - PORT=3001
       - DB_HOST=postgres
@@ -81,9 +82,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks:
+      - internal-net
   order-service:
     build: ./apps/order-service
-    ports: [ "3003:3003" ]
     environment:
       - PORT=3003
       - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
@@ -95,10 +97,11 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: 
+      - internal-net
 
   review-service:
     build: ./apps/review-service
-    ports: [ "3002:3002" ]
     environment:
       - PORT=3002
       - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/grailkits?authSource=admin
@@ -113,7 +116,22 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    networks: 
+      - internal-net
+
+  reverse-proxy:
+    build: reverse-proxy
+    ports: [ "80:8080" ]
+    depends_on:
+      gateway:
+        condition: service_healthy
+    networks: 
+      - external-net
 
 volumes:
   postgres_data:
   mongo_data:
+
+networks:
+  external-net:
+  internal-net:
