@@ -132,6 +132,20 @@ app.use(
 
 // Start the Gateway
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[API Gateway] Central entry point running on port ${PORT}`);
 });
+
+// Graceful shutdown — handle SIGTERM (docker compose down) and SIGINT (Ctrl+C)
+const shutdown = async (signal) => {
+  console.log(`[API Gateway] ${signal} received — shutting down gracefully`);
+  server.close(() => {
+    console.log('[API Gateway] HTTP server closed');
+  });
+  await redisClient.quit();
+  console.log('[API Gateway] Redis connection closed');
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
