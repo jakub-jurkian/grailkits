@@ -1,0 +1,41 @@
+# docker-compose.override.yml — developer mode
+# Docker Compose autom. connects this file with docker-compose.yml when `docker compose up`.
+# Doesn't require any additional flags — works out of the box.
+#
+# What it adds:
+#   - bind mount of the source code (changes in code are visible without rebuilding)
+#   - NODE_ENV=development
+#   - exposed ports of the services on the host (easier access from Postman/curl)
+
+services:
+  catalog-service:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./apps/catalog-service/src:/app/src:ro   # bind mount — live code
+    ports:
+      - "3001:3001"
+
+  review-service:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./apps/review-service/src:/app/src:ro
+    ports:
+      - "3002:3002"
+
+  order-service:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./apps/order-service/src:/app/src:ro
+    ports:
+      - "3003:3003"
+
+  gateway:
+    environment:
+      - NODE_ENV=development
+    volumes:
+      - ./apps/gateway/src:/app/src:ro
+    ports:
+      - "3000:3000"
