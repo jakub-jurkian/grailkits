@@ -17,6 +17,18 @@ services:
       - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
     networks:
       - internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   mongo:
     image: mongo:7
@@ -34,6 +46,18 @@ services:
       - mongo_data:/data/db
     networks:
       - internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   gateway:
     build: ./apps/gateway
@@ -46,10 +70,6 @@ services:
       - REDIS_PORT=6379
       - REDIS_PASSWORD=rootpassword
     depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
       redis:
         condition: service_healthy
       catalog-service:
@@ -66,6 +86,18 @@ services:
     networks:
       - internal-net
       - external-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30' 
+          memory: 128M 
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
   catalog-service:
     build: ./apps/catalog-service
     environment:
@@ -89,6 +121,18 @@ services:
       retries: 5
     networks:
       - internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M 
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
   order-service:
     build: ./apps/order-service
     environment:
@@ -104,6 +148,18 @@ services:
       retries: 5
     networks:
       - internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M 
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   review-service:
     build: ./apps/review-service
@@ -123,6 +179,18 @@ services:
       retries: 5
     networks:
       - internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M 
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   reverse-proxy:
     build: reverse-proxy
@@ -132,6 +200,18 @@ services:
         condition: service_healthy
     networks:
       - external-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 64M
+        reservations:
+          memory: 64M 
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
   redis:
     image: redis:7-alpine
@@ -145,6 +225,18 @@ services:
       retries: 5
     networks:
       - internal-net
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50' #50% max of 1 processor core
+          memory: 128M # Max 128MB RAM memory
+        reservations:
+          memory: 64M # min. 64 MB RAM with start
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m" # max size (10MB) of 1 file with logs
+        max-file: "3" # keep max 3 files
 
 volumes:
   postgres_data:
