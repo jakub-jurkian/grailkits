@@ -15,7 +15,7 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
-    networks: 
+    networks:
       - internal-net
 
   mongo:
@@ -42,10 +42,15 @@ services:
       - CATALOG_SERVICE_URL=http://catalog-service:3001
       - REVIEW_SERVICE_URL=http://review-service:3002
       - ORDER_SERVICE_URL=http://order-service:3003
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=rootpassword
     depends_on:
       postgres:
         condition: service_healthy
       mongo:
+        condition: service_healthy
+      redis:
         condition: service_healthy
       catalog-service:
         condition: service_healthy
@@ -58,7 +63,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: 
+    networks:
       - internal-net
       - external-net
   catalog-service:
@@ -97,7 +102,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: 
+    networks:
       - internal-net
 
   review-service:
@@ -116,7 +121,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: 
+    networks:
       - internal-net
 
   reverse-proxy:
@@ -125,8 +130,21 @@ services:
     depends_on:
       gateway:
         condition: service_healthy
-    networks: 
+    networks:
       - external-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: grailkits_redis
+    restart: always
+    command: redis-server --requirepass rootpassword
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "rootpassword", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-net
 
 volumes:
   postgres_data:
