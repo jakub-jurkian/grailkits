@@ -4,11 +4,11 @@ services:
     container_name: grailkits_postgres
     restart: always
     environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: rootpassword
-      POSTGRES_DB: grailkits_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U root -d grailkits_db" ]
+      test: [ "CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -35,8 +35,8 @@ services:
     container_name: grailkits_mongo
     restart: always
     environment:
-      MONGO_INITDB_ROOT_USERNAME: root
-      MONGO_INITDB_ROOT_PASSWORD: rootpassword
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}
     healthcheck:
       test: echo 'db.runCommand("ping").ok' | mongosh localhost:27017/test --quiet
       interval: 5s
@@ -59,8 +59,136 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  redis:
+    image: redis:7-alpine
+    container_name: grailkits_redis
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    healthcheck:
+      test: [ "CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-net
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  catalog-service:
+    build: ./apps/catalog-service
+    image: grailkits/catalog-service:1.0.0
+    environment:
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/grailkits?authSource=admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3001/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-net
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  order-service:
+    build: ./apps/order-service
+    image: grailkits/order-service:1.0.0
+    environment:
+      - PORT=3003
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3003/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-net
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  review-service:
+    build: ./apps/review-service
+    image: grailkits/review-service:1.0.0
+    environment:
+      - PORT=3002
+      - MONGODB_URI=mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongo:27017/grailkits?authSource=admin
+      - DATABASE_URL=postgres://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+    depends_on:
+      mongo:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [ "CMD-SHELL", "wget -qO- http://localhost:3002/health >/dev/null 2>&1 || exit 1" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - internal-net
+    stop_grace_period: 10s
+    deploy:
+      resources:
+        limits:
+          cpus: '0.30'
+          memory: 128M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
   gateway:
     build: ./apps/gateway
+    image: grailkits/gateway:1.0.0
     environment:
       - PORT=3000
       - CATALOG_SERVICE_URL=http://catalog-service:3001
@@ -68,7 +196,7 @@ services:
       - ORDER_SERVICE_URL=http://order-service:3003
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - REDIS_PASSWORD=rootpassword
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
     depends_on:
       redis:
         condition: service_healthy
@@ -86,104 +214,12 @@ services:
     networks:
       - internal-net
       - external-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.30' 
-          memory: 128M 
-        reservations:
-          memory: 64M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-  catalog-service:
-    build: ./apps/catalog-service
-    environment:
-      - PORT=3001
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_USER=root
-      - DB_PASSWORD=rootpassword
-      - DB_NAME=grailkits_db
-      - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
-      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/grailkits?authSource=admin
-    depends_on:
-      postgres:
-        condition: service_healthy
-      mongo:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:3001/health >/dev/null 2>&1 || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - internal-net
+    stop_grace_period: 10s
     deploy:
       resources:
         limits:
           cpus: '0.30'
-          memory: 128M 
-        reservations:
-          memory: 64M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-  order-service:
-    build: ./apps/order-service
-    environment:
-      - PORT=3003
-      - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
-    depends_on:
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:3003/health >/dev/null 2>&1 || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - internal-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.30'
-          memory: 128M 
-        reservations:
-          memory: 64M
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  review-service:
-    build: ./apps/review-service
-    environment:
-      - PORT=3002
-      - MONGODB_URI=mongodb://root:rootpassword@mongo:27017/grailkits?authSource=admin
-      - DATABASE_URL=postgres://root:rootpassword@postgres:5432/grailkits_db
-    depends_on:
-      mongo:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:3002/health >/dev/null 2>&1 || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - internal-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.30'
-          memory: 128M 
+          memory: 128M
         reservations:
           memory: 64M
     logging:
@@ -194,49 +230,26 @@ services:
 
   reverse-proxy:
     build: reverse-proxy
+    image: grailkits/reverse-proxy:1.0.0
     ports: [ "80:8080" ]
     depends_on:
       gateway:
         condition: service_healthy
     networks:
       - external-net
+    stop_grace_period: 10s
     deploy:
       resources:
         limits:
           cpus: '0.25'
           memory: 64M
         reservations:
-          memory: 64M 
+          memory: 64M
     logging:
       driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"
-
-  redis:
-    image: redis:7-alpine
-    container_name: grailkits_redis
-    restart: always
-    command: redis-server --requirepass rootpassword
-    healthcheck:
-      test: [ "CMD", "redis-cli", "-a", "rootpassword", "ping" ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-    networks:
-      - internal-net
-    deploy:
-      resources:
-        limits:
-          cpus: '0.50' #50% max of 1 processor core
-          memory: 128M # Max 128MB RAM memory
-        reservations:
-          memory: 64M # min. 64 MB RAM with start
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m" # max size (10MB) of 1 file with logs
-        max-file: "3" # keep max 3 files
 
 volumes:
   postgres_data:
