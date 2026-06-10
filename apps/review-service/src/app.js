@@ -1,8 +1,10 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const mongoose = require("mongoose");
 
 const connectDB = require("./config/db");
+const { closeCatalogPool } = require("./config/pg");
 const seedReviews = require("./db/seeds/seed_reviews");
 const ReviewRepository = require("./repositories/review.repository");
 const ProductStatsRepository = require("./repositories/product-stats.repository");
@@ -49,6 +51,20 @@ app.get("/health", (req, res) => {
 
 // Start the server
 const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[Review Service] Server is running on port ${PORT}`);
 });
+
+const shutdown = async (signal) => {
+  console.log(`[Review Service] ${signal} received — shutting down gracefully`);
+  await new Promise((resolve) => server.close(resolve));
+  console.log('[Review Service] HTTP server closed');
+  await mongoose.disconnect();
+  console.log('[Review Service] Mongoose disconnected');
+  await closeCatalogPool();
+  console.log('[Review Service] PG pool closed');
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));

@@ -21,9 +21,23 @@ app.get('/health', (req, res) => {
 });
 
 const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`[Catalog Service] Server is running on port ${PORT}`);
 });
+
+const shutdown = async (signal) => {
+  console.log(`[Catalog Service] ${signal} received — shutting down gracefully`);
+  await new Promise((resolve) => server.close(resolve));
+  console.log('[Catalog Service] HTTP server closed');
+  await pool.end();
+  console.log('[Catalog Service] PG pool closed');
+  await knex.destroy();
+  console.log('[Catalog Service] Knex pool closed');
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT',  () => shutdown('SIGINT'));
 
 const startServer = async () => {
   await knex.migrate.latest();
