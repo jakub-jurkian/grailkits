@@ -1,8 +1,11 @@
 // Seed: Products and variants with fixed UUIDs so order/review services can reference them
 exports.seed = async function (knex) {
-  // Clear in FK order
-  await knex('variants').del();
-  await knex('products').del();
+  // Idempotent: skip if already seeded (preserves user-created records across restarts)
+  const existing = await knex('products').count('id as count').first();
+  if (parseInt(existing.count) > 0) {
+    console.log('[Catalog Service] Products already seeded — skipping');
+    return;
+  }
 
   const [retro90s, retro00s, matchIssue, limited, modern] = await Promise.all([
     knex('categories').where({ name: 'Retro 90s' }).first(),
