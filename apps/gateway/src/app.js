@@ -44,7 +44,7 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
-app.get("/health", (req, res) => {
+app.get(["/health", "/api/health"], (req, res) => {
   res.status(200).json({ status: "API Gateway is operational" });
 });
 
