@@ -129,7 +129,7 @@ docker network inspect grailkits_internal-net
 docker volume ls | grep grailkits
 
 # Sprawdź że serwisy nie działają jako root
-docker compose exec catalog-service whoami   # → app lub node
+docker compose exec catalog-service whoami   # → node
 docker compose exec gateway whoami           # → app
 docker compose exec review-service whoami    # → app
 docker compose exec order-service whoami     # → app
