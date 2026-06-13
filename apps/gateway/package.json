@@ -10,6 +10,7 @@
     "express-rate-limit": "^8.5.2",
     "http-proxy-middleware": "^3.0.5",
     "ioredis": "^5.11.0",
+    "jose": "^6.2.3",
     "rate-limit-redis": "^5.0.0"
   },
   "devDependencies": {
