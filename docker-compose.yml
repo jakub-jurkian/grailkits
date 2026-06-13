@@ -197,6 +197,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - KEYCLOAK_JWKS_URI=http://keycloak:8080/auth/realms/grailkits/protocol/openid-connect/certs
+      - KEYCLOAK_ISSUER=http://localhost/auth/realms/grailkits
     depends_on:
       redis:
         condition: service_healthy
@@ -235,11 +237,6 @@ services:
     depends_on:
       gateway:
         condition: service_healthy
-    healthcheck:
-      test: [ "CMD-SHELL", "wget -qO- http://localhost:8080/api/health >/dev/null 2>&1 || exit 1" ]
-      interval: 10s
-      timeout: 5s
-      retries: 5
     networks:
       - external-net
     stop_grace_period: 10s
@@ -255,6 +252,25 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: grailkits_keycloak
+    command: start-dev
+    environment:
+      KC_HTTP_RELATIVE_PATH: /auth
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/${DB_NAME}
+      KC_DB_USERNAME: ${DB_USER}
+      KC_DB_PASSWORD: ${DB_PASSWORD}
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - internal-net
+      - external-net
+    stop_grace_period: 30s
 
 volumes:
   postgres_data:
