@@ -87,6 +87,192 @@
       return <p>{status}</p>;
     }
 
+    // ProductList — public
+    function ProductList() {
+      const [products, setProducts] = useState([]);
+      const [loading,  setLoading]  = useState(true);
+      const [error,    setError]    = useState(null);
+
+      useEffect(() => {
+        fetch(`${API}/products`)
+          .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+          .then(data => { setProducts(Array.isArray(data) ? data : []); setLoading(false); })
+          .catch(e  => { setError(e.message); setLoading(false); });
+      }, []);
+
+      return (
+        <section>
+          <h2>Products</h2>
+          {loading && <p>Loading…</p>}
+          {error   && <p style={{color:'red'}}>Error: {error}</p>}
+          {!loading && !error && products.length === 0 && <p>No products found.</p>}
+          <ul style={{listStyle:'none', padding:0}}>
+            {products.map(p => (
+              <li key={p.id} style={{borderBottom:'1px solid #eee', padding:'8px 0'}}>
+                <strong>{p.name}</strong> — <em>{p.brand}</em>
+                {Array.isArray(p.variants) && p.variants.map(v => (
+                  <span key={v.id} style={{marginLeft:12, fontSize:13, color:'#555'}}>
+                    [{v.size}] {(v.price / 100).toFixed(2)} PLN · stock: {v.stock}
+                    &nbsp;<code style={{fontSize:11,color:'#888'}}>{v.id}</code>
+                  </span>
+                ))}
+              </li>
+            ))}
+          </ul>
+        </section>
+      );
+    }
+
+    // CartPanel — requires auth
+    function CartPanel({ token }) {
+      const user   = decodeJwt(token);
+      const userId = user.preferred_username || user.sub;
+
+      const [cart,      setCart]      = useState(null);
+      const [variantId, setVariantId] = useState('');
+      const [qty,       setQty]       = useState(1);
+      const [msg,       setMsg]       = useState('');
+
+      const authHeaders = {
+        'Authorization': `Bearer ${token}`,
+        'x-user-id':     userId,
+      };
+
+      const fetchCart = () =>
+        fetch(`${API}/cart`, { headers: authHeaders })
+          .then(r => r.json())
+          .then(setCart)
+          .catch(e => setMsg(`Cart fetch error: ${e.message}`));
+
+      useEffect(() => { fetchCart(); }, []);
+
+      const addLine = async () => {
+        if (!variantId.trim()) return setMsg('Paste a Variant ID from the product list above.');
+        const res = await fetch(`${API}/cart/lines`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ variantId: variantId.trim(), quantity: Number(qty) }),
+        });
+        const data = await res.json();
+        if (!res.ok) return setMsg(`Error: ${data.error || res.status}`);
+        setMsg('Added to cart!');
+        fetchCart();
+      };
+
+      const checkout = async () => {
+        const res = await fetch(`${API}/checkout`, {
+          method: 'POST',
+          headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        });
+        const data = await res.json();
+        if (!res.ok) return setMsg(`Checkout error: ${data.error || res.status}`);
+        setMsg(`Order placed! ID: ${data.id} · Status: ${data.status}`);
+        fetchCart();
+      };
+
+      return (
+        <section>
+          <h2>Cart</h2>
+          <div style={{display:'flex', gap:8, flexWrap:'wrap', marginBottom:8}}>
+            <input
+              value={variantId}
+              onChange={e => setVariantId(e.target.value)}
+              placeholder="Variant ID (copy from product list)"
+              style={{flex:1, minWidth:260, padding:'6px 10px', borderRadius:4, border:'1px solid #ccc'}}
+            />
+            <input
+              type="number" min="1" value={qty}
+              onChange={e => setQty(e.target.value)}
+              style={{width:64, padding:'6px 10px', borderRadius:4, border:'1px solid #ccc'}}
+            />
+            <button className="primary" onClick={addLine}>Add to cart</button>
+          </div>
+          {msg && <p style={{margin:'4px 0'}}><em>{msg}</em></p>}
+          {cart?.lines?.length > 0 && (
+            <>
+              <table style={{width:'100%', borderCollapse:'collapse', marginTop:8}}>
+                <thead>
+                  <tr style={{textAlign:'left', borderBottom:'2px solid #eee'}}>
+                    <th>Variant ID</th><th style={{textAlign:'right'}}>Qty</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cart.lines.map(l => (
+                    <tr key={l.id} style={{borderBottom:'1px solid #f0f0f0'}}>
+                      <td style={{fontSize:12, color:'#666'}}>{l.variantId}</td>
+                      <td style={{textAlign:'right'}}>{l.quantity}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {cart.status === 'OPEN' && (
+                <button className="primary" style={{marginTop:12}} onClick={checkout}>Checkout</button>
+              )}
+            </>
+          )}
+          {cart && cart.lines?.length === 0 && <p style={{color:'#888'}}>Cart is empty.</p>}
+        </section>
+      );
+    }
+
+    // AdminPanel — requires admin role
+    function AdminPanel({ token }) {
+      const [reviews, setReviews] = useState([]);
+      const [loading, setLoading] = useState(true);
+      const [msg,     setMsg]     = useState('');
+
+      const fetchPending = () => {
+        fetch(`${API}/reviews?status=PENDING`, {
+          headers: { 'Authorization': `Bearer ${token}` },
+        })
+          .then(r => r.json())
+          .then(data => { setReviews(Array.isArray(data) ? data : []); setLoading(false); })
+          .catch(e => { setMsg(`Fetch error: ${e.message}`); setLoading(false); });
+      };
+
+      useEffect(() => { fetchPending(); }, []);
+
+      const moderate = async (id, status) => {
+        const res = await fetch(`${API}/reviews/${id}/moderate`, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ status, moderatorId: decodeJwt(token).sub, reason: `Manually ${status.toLowerCase()}` }),
+        });
+        const data = await res.json();
+        if (!res.ok) return setMsg(`Error: ${data.error || res.status}`);
+        setMsg(`Review ${id.slice(0,8)}… → ${status}`);
+        fetchPending();
+      };
+
+      return (
+        <section>
+          <h2>Admin — Review Moderation</h2>
+          {msg && <p style={{margin:'4px 0'}}><em>{msg}</em></p>}
+          {loading && <p>Loading reviews…</p>}
+          {!loading && reviews.length === 0 && <p style={{color:'#888'}}>No pending reviews.</p>}
+          {reviews.map(r => (
+            <div key={r._id} style={{border:'1px solid #ddd', borderRadius:6, padding:14, marginBottom:10}}>
+              <div style={{display:'flex', justifyContent:'space-between', alignItems:'flex-start'}}>
+                <div>
+                  <strong>{r.title}</strong>
+                  <span style={{marginLeft:8, color:'#f39c12'}}>{'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}</span>
+                  <span style={{marginLeft:8, fontSize:12, color:'#888'}}>{r.status}</span>
+                </div>
+                <div>
+                  <button className="primary" onClick={() => moderate(r._id, 'APPROVED')}>Approve</button>
+                  <button className="danger"  onClick={() => moderate(r._id, 'REJECTED')}>Reject</button>
+                </div>
+              </div>
+              <p style={{margin:'6px 0 0', fontSize:14, color:'#444'}}>{r.body}</p>
+            </div>
+          ))}
+        </section>
+      );
+    }
+
     // App
     function App() {
       const [token, setToken] = useState(sessionStorage.getItem('token'));
