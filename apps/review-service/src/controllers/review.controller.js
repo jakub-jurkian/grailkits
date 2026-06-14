@@ -3,11 +3,23 @@ const { errorResponse } = require('../utils/errors');
 class ReviewController {
   constructor(reviewService) {
     this.reviewService = reviewService;
+    this.getAllReviews = this.getAllReviews.bind(this);
     this.createReview = this.createReview.bind(this);
     this.getProductReviews = this.getProductReviews.bind(this);
     this.getAvgRatingAnalytics = this.getAvgRatingAnalytics.bind(this);
     this.getApprovedReviews = this.getApprovedReviews.bind(this);
     this.moderateReview = this.moderateReview.bind(this);
+  }
+
+  async getAllReviews(req, res) {
+    try {
+      const { status } = req.query;
+      const reviews = await this.reviewService.getAllReviews(status);
+      res.status(200).json(reviews);
+    } catch (error) {
+      console.error('[ReviewController] Error fetching all reviews:', error);
+      errorResponse(res, error);
+    }
   }
 
   async createReview(req, res) {

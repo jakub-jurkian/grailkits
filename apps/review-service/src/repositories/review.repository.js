@@ -6,6 +6,11 @@ class ReviewRepository {
     return await review.save(); // mongoose use save method to save new doc
   }
 
+  async findAll(status) {
+    const filter = status ? { status } : {};
+    return await Review.find(filter).sort({ createdAt: -1 });
+  }
+
   async findByProductId(productId) {
     return await Review
       .find({ productId })
