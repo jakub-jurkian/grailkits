@@ -93,13 +93,9 @@ cd grailkits
 
 ### 2. Utwórz plik `.env`
 
-```env
-DB_USER=grailkits
-DB_PASSWORD=secret
-DB_NAME=grailkits
-MONGO_USER=grailkits
-MONGO_PASSWORD=secret
-REDIS_PASSWORD=secret
+```bash
+
+cp .env.example .env
 ```
 
 ### 3. Uruchom system
