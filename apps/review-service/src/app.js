@@ -38,6 +38,7 @@ const reviewService = new ReviewService(reviewRepository, productStatsRepository
 const reviewController = new ReviewController(reviewService);
 
 // Routes
+app.get("/api/v1/reviews", reviewController.getAllReviews);
 app.post("/api/v1/reviews", reviewController.createReview);
 app.get("/api/v1/reviews/product/:productId", reviewController.getProductReviews);
 app.get("/api/v1/reviews/analytics/avg-rating", reviewController.getAvgRatingAnalytics);

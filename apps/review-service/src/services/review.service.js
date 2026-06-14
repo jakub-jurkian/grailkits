@@ -7,6 +7,10 @@ class ReviewService {
     this.productStatsRepository = productStatsRepository;
   }
 
+  async getAllReviews(status) {
+    return await this.reviewRepository.findAll(status);
+  }
+
   async addReview(data) {
     const payload = {
       ...data,
