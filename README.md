@@ -1,4 +1,171 @@
-# GrailKits
+# GrailKits — Marketplace koszulek piłkarskich - część README dla przedmiotu bezpieczeństwo aplikacji webowych
+
+**Imię i nazwisko:** Jakub Jurkian
+**Grupa:** 2
+
+---
+
+## Opis funkcjonalności
+
+GrailKits to marketplace koszulek piłkarskich zbudowany w architekturze mikroserwisowej i zabezpieczony zgodnie ze standardem **OAuth 2.0 (Authorization Code Flow + PKCE)**.
+
+### Użytkownik niezalogowany
+- Przegląda listę produktów (`GET /api/v1/products`) — endpoint publiczny
+- Czyta recenzje (`GET /api/v1/reviews`) — endpoint publiczny
+
+### Użytkownik zalogowany (rola `user`)
+- Loguje się przez Keycloak z PKCE (S256) — frontend generuje `code_verifier` i `code_challenge`, wymienia kod na JWT
+- Dodaje produkty do koszyka (`POST /api/v1/cart/lines`) — wymaga tokenu JWT
+- Składa zamówienie (`POST /api/v1/checkout`) — wymaga tokenu JWT
+- Wystawia recenzję (`POST /api/v1/reviews`) — wymaga tokenu JWT; recenzja trafia w stan `PENDING`
+
+### Administrator (rola `admin`)
+- Zatwierdza lub odrzuca recenzje (`PATCH /api/v1/reviews/:id/moderate`) — wymaga tokenu JWT **i** roli `admin`; inni użytkownicy dostają `403 Forbidden`
+
+### Zabezpieczenia w gateway
+- Weryfikacja JWT przez JWKS endpoint Keycloak (biblioteka `jose`)
+- Rate limiting oparty na Redis (100 req / 15 min per IP)
+- Endpointy `/api/v1/cart`, `/api/v1/orders`, `/api/v1/checkout`, `/api/v1/payments` — w pełni chronione
+- Mutacje na produktach i recenzjach — chronione; odczyty — publiczne
+- `/health` — publiczny (health check)
+
+---
+
+## Diagram komunikacji
+
+```mermaid
+flowchart TD
+    Browser["🖥️ Przeglądarka\n(React + PKCE)"]
+
+    subgraph Docker["Docker Compose"]
+        direction TB
+        Nginx["nginx · :80\nReverse Proxy\n+ serwuje frontend"]
+        KC["Keycloak · /auth\nAuthorization Server\nOAuth 2.0 + OIDC"]
+        GW["API Gateway · :3000\nweryfikacja JWT\nrate-limit Redis"]
+        Redis[("Redis\nrate-limit store")]
+        CS["catalog-service · :3001"]
+        RS["review-service · :3002"]
+        OS["order-service · :3003"]
+        PG[("PostgreSQL\nkatalog · zamówienia")]
+        Mongo[("MongoDB\nrecenzje")]
+    end
+
+    Browser -->|"1 · GET / → index.html"| Nginx
+
+    Browser -->|"2 · redirect /auth/realms/grailkits/...\n+ code_challenge S256"| Nginx
+    Nginx --> KC
+    KC -->|"authorization code"| Browser
+
+    Browser -->|"3 · POST /auth/.../token\ncode + code_verifier"| Nginx
+    Nginx --> KC
+    KC -->|"access_token JWT"| Browser
+
+    Browser -->|"4 · /api/v1/**\nAuthorization: Bearer JWT"| Nginx
+    Nginx -->|"proxy_pass"| GW
+
+    GW <-->|"JWKS · weryfikacja podpisu"| KC
+    GW <-->|"rate-limit"| Redis
+    GW -->|"GET /api/v1/products\n(publiczny)"| CS
+    GW -->|"POST /api/v1/products\nGET /api/v1/reviews\nPATCH /moderate (admin)"| RS
+    GW -->|"cart · checkout\norders · payments\n(JWT wymagany)"| OS
+
+    CS <--> PG
+    OS <--> PG
+    RS <--> Mongo
+    RS <-->|"write-back avg_rating"| PG
+```
+
+---
+
+## Instrukcja uruchomienia
+
+### Wymagania
+
+- Docker Desktop (z włączonym Docker Compose v2)
+- Git
+
+### 1. Sklonuj repozytorium
+
+```bash
+git clone <url-repo>
+cd grailkits
+```
+
+### 2. Utwórz plik `.env`
+
+```env
+DB_USER=grailkits
+DB_PASSWORD=secret
+DB_NAME=grailkits
+MONGO_USER=grailkits
+MONGO_PASSWORD=secret
+REDIS_PASSWORD=secret
+```
+
+### 3. Uruchom system
+
+```bash
+docker compose up --build -d
+```
+
+Pierwsze uruchomienie zajmuje ~2 minuty (migracje, seedy, start Keycloak).
+
+### 4. Skonfiguruj Keycloak
+
+Wejdź na `http://localhost/auth/admin` → zaloguj się `admin` / `admin`.
+
+**a)** Przełącz realm z `master` na **`grailkits`** (lewy górny róg).
+
+**b)** Clients → `grailkits-frontend` → Settings:
+- **Valid redirect URIs:** dodaj `http://localhost/callback`
+- Zapisz.
+
+**c)** Realm roles → Create role → utwórz `admin` i `user`.
+
+**d)** Users → Create new user → podaj username → Save.  
+Zakładka **Credentials** → Set password (wyłącz Temporary).  
+Zakładka **Role mapping** → Assign role → wybierz `admin` lub `user`.
+
+### 5. Otwórz aplikację
+
+```
+http://localhost
+```
+
+### Tryb deweloperski (hot-reload dla gateway)
+
+```bash
+docker compose up -d      # override.yml dołączany automatycznie
+```
+
+Zmiany w `apps/gateway/src/` są wykrywane przez `nodemon` bez rebuildu obrazu.
+
+### Zatrzymanie
+
+```bash
+docker compose down       # dane zostają w named volumes
+docker compose down -v    # dane usunięte
+```
+
+Frontend jest zrobiony minimalnie, jego jedynym celem jest zademonstrowanie mechanizmów bezpieczeństwa, nie pełna aplikacja sklepowa.
+frontend pokazuje:
+- logowanie przez Keycloak z PKCE
+- publiczny widok (ProductList bez tokenu)
+- chroniony widok (CartPanel wymaga tokenu)
+- widok ograniczony rolą (AdminPanel tylko dla admina)
+- operacja z kontrolą roli (Approve/Reject wysyła PATCH z tokenem, gateway sprawdza rolę admin)
+
+Co nie jest pokazane w UI, choć backend to obsługuje:
+- lista zatwierdzonych/odrzuconych recenzji
+- historia zamówień (GET /api/v1/orders)
+- szczegóły zamówienia
+- historia płatności
+
+Te endpointy działają poprawnie i są zabezpieczone, po prostu nie ma do nich widoków w React.
+
+
+Koniec opisu na przedmiot bezpieczeństwo aplikacji webowych, niżej jest oryginalne README do całego projektu
+---
 
 E-commerce backend for limited football kits. API Gateway + three domain microservices, PostgreSQL for catalog / orders / payments, MongoDB for product details and reviews.
 
