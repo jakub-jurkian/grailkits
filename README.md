@@ -94,7 +94,6 @@ cd grailkits
 ### 2. Utwórz plik `.env`
 
 ```bash
-
 cp .env.example .env
 ```
 
@@ -110,33 +109,137 @@ Pierwsze uruchomienie zajmuje ~2 minuty (migracje, seedy, start Keycloak).
 
 Wejdź na `http://localhost/auth/admin` → zaloguj się `admin` / `admin`.
 
-**a)** Przełącz realm z `master` na **`grailkits`** (lewy górny róg).
+**a) Utwórz realm**
 
-**b)** Clients → `grailkits-frontend` → Settings:
-- **Valid redirect URIs:** dodaj `http://localhost/callback`
-- Zapisz.
+Kliknij dropdown z nazwą `master` (lewy górny róg) → **Create realm**.  
+- Realm name: `grailkits`  
+- Kliknij **Create**.
 
-**c)** Realm roles → Create role → utwórz `admin` i `user`.
+**b) Utwórz klienta**
 
-**d)** Users → Create new user → podaj username → Save.  
-Zakładka **Credentials** → Set password (wyłącz Temporary).  
-Zakładka **Role mapping** → Assign role → wybierz `admin` lub `user`.
+Clients → **Create client**.
+- Client type: `OpenID Connect`
+- Client ID: `grailkits-frontend`
+- Kliknij **Next**.
 
-### 5. Otwórz aplikację
+Na kolejnym ekranie:
+- Client authentication: **OFF** (public client)
+- Kliknij **Next**, potem **Save**.
 
-```
-http://localhost
-```
+Następnie w zakładce **Settings** klienta:
+- **Valid redirect URIs:** `http://localhost/callback`
+- **Web origins:** `http://localhost`
+- Kliknij **Save**.
 
-### Tryb deweloperski (hot-reload dla gateway)
+**c) Utwórz role**
+
+Realm roles → **Create role** → Name: `admin` → Save.  
+Realm roles → **Create role** → Name: `user` → Save.
+
+**d) Utwórz użytkownika**
+
+Users → **Create new user** → podaj username (np. testuser) → **Create**.  
+Zakładka **Credentials** → **Set password** → wpisz hasło, wyłącz **Temporary** → **Save**.  
+Zakładka **Role mapping** → **Assign role** → zmień filtr na „Filter by realm roles" → zaznacz `user` → **Assign**.
+I analogicznie należy utworzyć użytkownika admin.
+
+### 5. Weryfikacja działania (flow E2E)
+
+**Krok 1 — publiczny dostęp**
+
+Otwórz `http://localhost` bez logowania. Lista produktów powinna się załadować.
+
+Potwierdź że chroniony endpoint zwraca 401:
 
 ```bash
-docker compose up -d      # override.yml dołączany automatycznie
+# bash / macOS / Linux
+curl http://localhost/api/v1/cart
 ```
 
-Zmiany w `apps/gateway/src/` są wykrywane przez `nodemon` bez rebuildu obrazu.
+```powershell
+# PowerShell (Windows)
+Invoke-RestMethod -Uri http://localhost/api/v1/cart
+```
 
-### Zatrzymanie
+Oczekiwana odpowiedź: `{"error":"Missing or invalid Authorization header"}`
+
+---
+
+**Krok 2 — logowanie (PKCE)**
+
+Otwórz `http://localhost`, kliknij **Login** → zostaniesz przekierowany do Keycloak → zaloguj się → po powrocie zobaczysz nazwę użytkownika i badge z rolą (`user` lub `admin`).
+
+---
+
+**Krok 3 — koszyk i zamówienie**
+
+1. Skopiuj `Variant ID` spod dowolnego produktu na stronie (szary kod przy rozmiarze)
+2. Wklej go w pole Variant ID w sekcji Cart, ustaw ilość i kliknij **Add to cart**
+3. Kliknij **Checkout** — pojawi się komunikat z ID zamówienia
+
+---
+
+**Krok 4 — dodaj recenzję przez API**
+
+Pobierz ID produktu (tekst na szaro obok wartości stock) z listy produktów, następnie dodaj recenzję korzystając z tokenu - skopiuj token z konsoli przeglądarki (F12 → Console):
+
+```javascript
+sessionStorage.getItem('token')
+```
+<PRODUCT_ID> w żądaniu powinno być ID produktu który recenzujemy np. b0000000-0000-0000-0000-000000000005
+```bash
+# bash
+curl -X POST http://localhost/api/v1/reviews \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  -d '{"productId":"<PRODUCT_ID>","userId":"test","rating":5,"title":"Swietna","body":"Polecam te koszulke"}'
+```
+
+```powershell
+# PowerShell
+$token = "<TOKEN>"
+Invoke-RestMethod -Uri http://localhost/api/v1/reviews `
+  -Method POST `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json" `
+  -Body '{"productId":"<PRODUCT_ID>","userId":"test","rating":5,"title":"Swietna","body":"Polecam te koszulke"}'
+```
+
+---
+
+**Krok 5 — moderacja recenzji (wymaga konta z rolą `admin`)**
+
+Zaloguj się kontem z rolą `admin` → w sekcji **Admin — Review Moderation** pojawi się recenzja z Kroku 4 → kliknij **Approve** lub **Reject**.
+
+---
+
+**Krok 6 — weryfikacja kontroli ról**
+
+Próba moderacji tokenem zwykłego usera (bez roli `admin`) powinna zwrócić 403:
+
+```bash
+# bash
+curl -X PATCH http://localhost/api/v1/reviews/<REVIEW_ID>/moderate \
+  -H "Authorization: Bearer <TOKEN_ZWYKLEGO_USERA>" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"APPROVED","moderatorId":"x","reason":"test"}'
+```
+
+```powershell
+# PowerShell
+$token = "<TOKEN_ZWYKLEGO_USERA>"
+Invoke-RestMethod -Uri http://localhost/api/v1/reviews/<REVIEW_ID>/moderate `
+  -Method PATCH `
+  -Headers @{ Authorization = "Bearer $token" } `
+  -ContentType "application/json" `
+  -Body '{"status":"APPROVED","moderatorId":"x","reason":"test"}'
+```
+
+Oczekiwana odpowiedź: `{"error":"Forbidden — insufficient role"}`
+
+---
+
+### 6. Zatrzymanie
 
 ```bash
 docker compose down       # dane zostają w named volumes
