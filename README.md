@@ -1,5 +1,7 @@
 # Grailkits
 > A microservice-based e-commerce marketplace dedicated to football jerseys. The system handles the entire sales process: from browsing the product catalog, through cart management and checkout, to user reviews. The architecture ensures high scalability of individual domains.
+>
+> *Note: This project was originally developed as an academic assignment to demonstrate the practical implementation of a backend application.*
 
 [API Specification / Swagger UI](./docs/openapi.yaml) 
 
