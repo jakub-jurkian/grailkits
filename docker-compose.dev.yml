@@ -1,6 +1,5 @@
-# docker-compose.override.yml — developer mode
-# Docker Compose autom. connects this file with docker-compose.yml when `docker compose up`.
-# Doesn't require any additional flags — works out of the box.
+# docker-compose.dev.yml — developer mode
+# Dev mode (opt-in): docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 #
 # What it adds:
 #   - bind mount of the source code (changes in code are visible without rebuilding)
