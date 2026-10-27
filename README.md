@@ -1,74 +1,141 @@
 # Grailkits
-> A microservice-based e-commerce marketplace dedicated to football jerseys. The system handles the entire sales process: from browsing the product catalog, through cart management and checkout, to user reviews. The architecture ensures high scalability of individual domains.
->
-> *Note: This project was originally developed as an academic assignment to demonstrate the practical implementation of a backend application.*
 
-[API Specification / Swagger UI](./docs/openapi.yaml) 
+*A microservice e-commerce backend for a football-jersey marketplace.*
 
-## Engineering Highlights & Architecture Decisions
-*This section highlights architectural decisions over basic CRUD operations.*
+| | |
+|---|---|
+| **API spec** | [docs/openapi.yaml](docs/openapi.yaml) |
+| **Demo client** | `http://localhost` after `docker compose up` - log in via Keycloak, browse, add to cart, check out |
+| **Stack** | Node.js, Express, PostgreSQL, MongoDB, Redis, Keycloak, Nginx, Docker Compose |
 
-* **Microservices Architecture:** The project is divided into independent services (Gateway, Catalog, Order, Review), ensuring data isolation and technological independence of specific domains.
-* **Polyglot Persistence:** Hybrid database architecture tailored to domain requirements:
-  - Relational databases: `PostgreSQL` managed by Knex.js query builder for services requiring consistent order states and secure transactions.
-  - Document databases: `MongoDB` supporting dynamically changing product detail attributes (ProductDetailMongoRepository) and flexible, schema-less review management in the Review Service.
-* **Security & Authentication:** Implemented and configured the OAuth 2.0 standard. External IAM (Keycloak) handles authentication procedures using Authorization Code Flow + PKCE. A central Identity Provider manages role-based access control (User, Admin).
-* **API Gateway Pattern:** A secure, single point of entry proxy protecting microservices, with built-in rate limiting and request validation, including cryptographic JWT signature verification via JWKS.
+> Built as an academic project to practise service decomposition, polyglot persistence and OAuth 2.0.
+> It is written in Node.js; the same patterns map directly onto Spring (see [Trade-offs](#trade-offs-and-known-limitations)).
+
+## Overview
+
+Customers browse a catalogue of football jerseys, keep a cart, check out, and review products; admins
+moderate reviews. The backend is split into four services behind a single gateway, with authentication
+handed to Keycloak instead of custom auth code.
+
+The two problems it is built around:
+
+- **Who is calling?** Every request is authenticated once, at the edge, and services trust only the
+  identity the gateway derives from a verified token - never one the client claims.
+- **Never sell the last jersey twice.** Checkout locks the stock row, checks it and decrements it in one
+  database transaction.
 
 ## Tech Stack
-* **Language / Framework:** Node.js, Express.js (ES6+)
-* **Data Layer:** PostgreSQL (Knex.js at the repository layer), MongoDB (Mongoose/Native driver), Redis (caching / rate-limiting)
-* **Testing:** Jest + Supertest (isolated integration testing of endpoints / API contracts)
-* **DevOps / Infra:** Docker, Docker Compose, Nginx (Reverse Proxy), Keycloak IAM.
 
-## Architecture & System Design
-*The application utilizes an architecture with separated domains using a layered approach within individual microservices (Controllers -> Services -> Repositories), emphasizing the separation of business logic from database integration.*
+| Technology | Why it's here |
+|---|---|
+| **Node.js & Express** | Four small HTTP services with a controller → service → repository structure. |
+| **Keycloak** | Identity provider: OAuth 2.0 Authorization Code + PKCE, realm roles (user, admin). |
+| **`jose`** | Verifies JWT signatures at the gateway against Keycloak's public keys (JWKS). |
+| **`http-proxy-middleware`** | Routes requests from the gateway to each service. |
+| **Redis** | Shared rate-limit counters, so the limit holds across gateway instances. |
+| **PostgreSQL** | Orders, carts, payments, stock and the relational catalogue - data that needs transactions and row locks. |
+| **MongoDB** | Product attributes that vary per item, and document-shaped reviews. |
+| **Knex, Sequelize, Prisma, Mongoose** | Data access per service (see trade-offs on the ORM mix). |
+| **Jest + Supertest** | ~70 integration tests over HTTP against a real PostgreSQL test database. |
+| **Nginx** | Reverse proxy and the single public entry point; serves the demo client. |
+| **Docker Compose** | The whole system - services, databases, Redis, Keycloak - with one command. |
+
+## Architecture
 
 ```mermaid
-graph TD
-    Client[Client Application] -->|REST API Requests| Nginx[Nginx Reverse Proxy]
-    Nginx -->|Routing| Gateway[API Gateway Layer & Rate Limiter]
-    Keycloak((Keycloak IAM)) <-->|Auth & Token Validation| Gateway
-    Gateway -->|DTOs| Catalog[Catalog Service]
-    Gateway -->|DTOs| Order[Order Service]
-    Gateway -->|DTOs| Review[Review Service]
-    
-    Catalog -->|SQL| Postgres[(PostgreSQL)]
-    Catalog -->|NoSQL| Mongo[(MongoDB)]
-    Order -->|SQL / Transaction| Postgres
-    Review -->|NoSQL| Mongo
-    Gateway -->|Rate limiting| Redis[(Redis)]
+flowchart LR
+    Client["Browser / demo client"] -->|HTTP :80| Nginx["Nginx<br/>reverse proxy"]
+    Client <-->|login: Auth Code + PKCE| Keycloak(("Keycloak"))
+    Nginx --> Gateway
+    subgraph Internal["Internal Docker network"]
+        Gateway["API Gateway<br/>JWT verify · rate limit · x-user-id"]
+        Catalog["Catalog Service"]
+        Order["Order Service<br/>cart · checkout · payments"]
+        Review["Review Service"]
+        Gateway --> Catalog
+        Gateway --> Order
+        Gateway --> Review
+    end
+    Gateway -->|JWKS| Keycloak
+    Gateway --> Redis[("Redis")]
+    Catalog --> PG[("PostgreSQL")]
+    Order --> PG
+    Review --> PG
+    Catalog --> Mongo[("MongoDB")]
+    Review --> Mongo
 ```
 
-## Getting Started
+**The services**
 
-**Prerequisites:** Docker and docker-compose installed.
+- **Gateway** - the only service reachable from outside. Verifies the JWT, enforces roles, rate-limits,
+  and forwards the caller's identity as an `x-user-id` header taken from the token.
+- **Catalog** - products, variants and categories in PostgreSQL; flexible product details in MongoDB.
+- **Order** - carts, checkout and payments in PostgreSQL.
+- **Review** - reviews in MongoDB; approved reviews update rating statistics on the product.
+
+## Engineering Decisions
+
+- **Authentication at the edge, identity from the token.** The gateway verifies each JWT locally against
+  Keycloak's JWKS (no call to Keycloak per request), checks the issuer, then **strips any client-supplied
+  `x-user-id` and sets it from the token's `sub`**. Services never accept an identity the caller typed.
+- **Public reads, protected writes.** Catalogue and review `GET`s are public; carts, orders, checkout and
+  payments require a token; review moderation requires the `admin` realm role.
+- **Checkout cannot oversell.** One transaction locks each variant row (`SELECT … FOR UPDATE`), checks
+  stock, decrements it and creates the order. Prices come from the locked row, never from the request,
+  and the order endpoint rejects client-supplied line items.
+- **Rate limiting in Redis.** 100 requests per 15 minutes per IP, with standard `RateLimit-*` headers and
+  a `429` body. Counters live in Redis, not gateway memory.
+- **Storage chosen per data shape.** Transactional data in PostgreSQL; variable product attributes and
+  reviews in MongoDB.
+- **Production-like by default.** `docker compose up` exposes only Nginx; services are reachable only
+  through the gateway. Direct service ports and live code reload are an explicit opt-in dev mode.
+- **Graceful shutdown.** The gateway closes HTTP and Redis connections on `SIGTERM`.
+
+## Testing
 
 ```bash
-# Clone the repository
-git clone <repository-url>
-cd <project-directory>
-
-# Build and start all services (app + database)
-docker compose up --build
+cd apps/catalog-service && npm test   # likewise for order-service and review-service
 ```
 
-Check `.env` files in application repositories for required environment variables mapping. The platform automatically provisions default databases during setup scripts execution (`init-test-db.sql`).
+~70 Jest + Supertest tests exercise each service's endpoints over HTTP against a real PostgreSQL test
+database (`grailkits_test`, created by `docker/init-test-db.sql`).
 
-## Testing & Quality Assurance
+## Trade-offs and Known Limitations
 
-* **Integration tests:** Core logic of endpoints and microservice availability runs over API requests via `Jest` and `Supertest`. 
+- **The services share one PostgreSQL database.** Order locks and updates the catalogue's `variants`
+  table directly, and Review writes rating statistics into `products`. This gives checkout a simple local
+  ACID transaction, but couples the services through the schema - closer to a distributed monolith than
+  true database-per-service. The proper split: each service owns its data, and they coordinate through
+  events (`OrderPlaced`, `StockReserved`) published via a transactional outbox, with a saga and
+  compensating actions instead of one transaction.
+- **Review approval spans two stores.** The review is saved in MongoDB and the statistics in PostgreSQL;
+  a crash between the two leaves the statistics stale until the next approval.
+- **Services trust the internal network.** They rely on the gateway for authentication; a zero-trust
+  setup would validate the JWT in each service or use mTLS between them.
+- **No audience (`aud`) check** on tokens yet - only signature, expiry and issuer.
+- **Two ORMs in the Order service** (Sequelize for carts and orders, Prisma for payments) - accidental
+  complexity worth consolidating.
+- **No CI pipeline or centralised logging/tracing yet.**
+
+**How it maps to Java:** Gateway → Spring Cloud Gateway · JWKS verification → Spring Security OAuth2
+resource server · Knex/Sequelize/Mongoose → Spring Data JPA / MongoDB · `FOR UPDATE` →
+`@Lock(PESSIMISTIC_WRITE)` · rate limiting → Bucket4j + Redis · events → Spring Kafka + outbox.
+
+## Running Locally
+
+Requires Docker and Docker Compose.
 
 ```bash
-# Command to run the test suite per service
-cd apps/catalog-service
-npm run test
+cp .env.example .env          # fill in database, Redis and Keycloak credentials
+docker compose up --build     # everything behind Nginx on http://localhost
 ```
 
-## What I'd Improve With More Time
+Developer mode - live code reload and direct service ports (3000-3003) for Postman:
 
-1. **System Events & Message Broker:** Implement an asynchronous event queue (RabbitMQ / Kafka) to exchange events (e.g., cart operations and order finalization) between _Order Service_ and _Catalog Service_ instead of potential synchronous communication.
-2. **Centralized Logging:** Add an external request log and error tracking system for more efficient debugging in a distributed environment (e.g., ELK Stack: Elasticsearch, Logstash, Kibana).
+```bash
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
+```
 
 ## License
+
 MIT
