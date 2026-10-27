@@ -27,7 +27,7 @@ class ReviewController {
       const body = req.body || {};
       const review = await this.reviewService.addReview({
         productId: body.productId,
-        userId: body.userId,
+        userId: req.header('x-user-id'),
         rating: body.rating,
         title: body.title,
         body: body.body,

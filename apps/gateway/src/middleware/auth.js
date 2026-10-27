@@ -1,4 +1,3 @@
-const { createRemoteJWKSClient } = require("jose");
 const { jwtVerify, createRemoteJWKSet } = require("jose");
 
 const JWKS_URI =
