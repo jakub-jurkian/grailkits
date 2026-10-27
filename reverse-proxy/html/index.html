@@ -126,16 +126,14 @@
     // CartPanel — requires auth
     function CartPanel({ token }) {
       const user   = decodeJwt(token);
-      const userId = user.preferred_username || user.sub;
-
+      
       const [cart,      setCart]      = useState(null);
       const [variantId, setVariantId] = useState('');
       const [qty,       setQty]       = useState(1);
       const [msg,       setMsg]       = useState('');
 
       const authHeaders = {
-        'Authorization': `Bearer ${token}`,
-        'x-user-id':     userId,
+        'Authorization': `Bearer ${token}`
       };
 
       const fetchCart = () =>

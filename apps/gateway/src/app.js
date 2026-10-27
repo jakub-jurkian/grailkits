@@ -38,12 +38,20 @@ const limiter = rateLimit({
     res.status(429).json({
       status: 429,
       error: "Too Many Requests",
-      message: "Slown down! Rate limit exceeded. Try again in 15 min.",
+      message: "Slow down! Rate limit exceeded. Try again in 15 min.",
     });
   },
 });
 
 app.use(limiter);
+
+// Identity comes only from the verified JWT, never from the client.
+const forwardVerifiedUser = (proxyReq, req) => {
+  proxyReq.removeHeader("x-user-id");
+  if (req.user?.sub) {
+    proxyReq.setHeader("x-user-id", req.user.sub);
+  }
+};
 
 // Proxy instances (reusable)
 const catalogProxy = createProxyMiddleware({
@@ -53,6 +61,7 @@ const catalogProxy = createProxyMiddleware({
     if (path === "/" || path === "") return "/api/v1/products";
     return `/api/v1/products${path}`;
   },
+  on: { proxyReq: forwardVerifiedUser },
 });
 
 const reviewProxy = createProxyMiddleware({
@@ -65,6 +74,7 @@ const reviewProxy = createProxyMiddleware({
     if (pathname === "/" || pathname === "") return `/api/v1/reviews${query}`;
     return `/api/v1/reviews${pathname}${query}`;
   },
+  on: { proxyReq: forwardVerifiedUser },
 });
 
 const orderProxy = (prefix) =>
@@ -75,6 +85,7 @@ const orderProxy = (prefix) =>
       if (path === "/" || path === "") return prefix;
       return `${prefix}${path}`;
     },
+    on: { proxyReq: forwardVerifiedUser },
   });
 
 app.get(["/health", "/api/health"], (req, res) => {
@@ -92,7 +103,7 @@ app.use("/api/v1/reviews", (req, res, next) => {
   if (req.method === "GET") return reviewProxy(req, res, next);
   if (req.method === "PATCH" && req.path.endsWith("/moderate")) {
     return authenticate(req, res, () =>
-      requireRole("admin")(req, res, () => reviewProxy(req, res, next))
+      requireRole("admin")(req, res, () => reviewProxy(req, res, next)),
     );
   }
   authenticate(req, res, () => reviewProxy(req, res, next));
