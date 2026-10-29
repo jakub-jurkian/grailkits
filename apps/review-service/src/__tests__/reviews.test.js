@@ -29,7 +29,7 @@ afterAll(async () => {
 describe('POST /api/v1/reviews', () => {
   it('creates a review and returns 201 with the saved document', async () => {
     const res = await request(app)
-      .post('/api/v1/reviews')
+      .post('/api/v1/reviews').set('x-user-id', 'user-001')
       .send(VALID_REVIEW);
 
     expect(res.status).toBe(201);
@@ -44,26 +44,26 @@ describe('POST /api/v1/reviews', () => {
 
   it('returns 400 when title is missing', async () => {
     const { title, ...noTitle } = VALID_REVIEW;
-    const res = await request(app).post('/api/v1/reviews').send(noTitle);
+    const res = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(noTitle);
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when body contains HTML tags', async () => {
     const res = await request(app)
-      .post('/api/v1/reviews')
+      .post('/api/v1/reviews').set('x-user-id', 'user-001')
       .send({ ...VALID_REVIEW, body: '<script>alert(1)</script>' });
     expect(res.status).toBe(400);
   });
 
   it('returns 400 when rating is out of range', async () => {
     const res = await request(app)
-      .post('/api/v1/reviews')
+      .post('/api/v1/reviews').set('x-user-id', 'user-001')
       .send({ ...VALID_REVIEW, rating: 6 });
     expect(res.status).toBe(400);
   });
 
   it('pre-save hook populates moderationHistory on creation', async () => {
-    const res = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    const res = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(VALID_REVIEW);
     expect(res.status).toBe(201);
     expect(res.body.moderationHistory).toHaveLength(1);
     expect(res.body.moderationHistory[0].status).toBe('PENDING');
@@ -74,7 +74,7 @@ describe('POST /api/v1/reviews', () => {
 
 describe('GET /api/v1/reviews/product/:productId', () => {
   it('returns 200 with an array of reviews for the product', async () => {
-    await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(VALID_REVIEW);
 
     const res = await request(app)
       .get(`/api/v1/reviews/product/${VALID_REVIEW.productId}`);
@@ -94,8 +94,8 @@ describe('GET /api/v1/reviews/product/:productId', () => {
   });
 
   it('returns reviews sorted by createdAt descending', async () => {
-    await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, title: 'First review', rating: 3 });
-    await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, title: 'Second review', rating: 5 });
+    await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send({ ...VALID_REVIEW, title: 'First review', rating: 3 });
+    await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send({ ...VALID_REVIEW, title: 'Second review', rating: 5 });
 
     const res = await request(app)
       .get(`/api/v1/reviews/product/${VALID_REVIEW.productId}`);
@@ -109,8 +109,8 @@ describe('GET /api/v1/reviews/product/:productId', () => {
 
 describe('GET /api/v1/reviews/analytics/avg-rating', () => {
   it('returns 200 with aggregated avg rating per product', async () => {
-    const first = await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, rating: 4 });
-    const second = await request(app).post('/api/v1/reviews').send({ ...VALID_REVIEW, rating: 2 });
+    const first = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send({ ...VALID_REVIEW, rating: 4 });
+    const second = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send({ ...VALID_REVIEW, rating: 2 });
 
     await request(app)
       .patch(`/api/v1/reviews/${first.body._id}/moderate`)
@@ -129,11 +129,11 @@ describe('GET /api/v1/reviews/analytics/avg-rating', () => {
   });
 
   it('filters by productId when provided as query param', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(VALID_REVIEW);
     await request(app)
       .patch(`/api/v1/reviews/${created.body._id}/moderate`)
       .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Ok' });
-    await request(app).post('/api/v1/reviews').send({
+    await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send({
       ...VALID_REVIEW,
       productId: 'a0000000-0000-0000-0000-000000000002',
     });
@@ -151,11 +151,11 @@ describe('GET /api/v1/reviews/analytics/avg-rating', () => {
 
 describe('GET /api/v1/reviews/approved', () => {
   it('returns only APPROVED reviews', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(VALID_REVIEW);
     await request(app)
       .patch(`/api/v1/reviews/${created.body._id}/moderate`)
       .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Looks good' });
-    await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(VALID_REVIEW);
 
     const res = await request(app).get('/api/v1/reviews/approved');
 
@@ -165,11 +165,11 @@ describe('GET /api/v1/reviews/approved', () => {
   });
 
   it('filters by productId when provided', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(VALID_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(VALID_REVIEW);
     await request(app)
       .patch(`/api/v1/reviews/${created.body._id}/moderate`)
       .send({ status: 'APPROVED', moderatorId: 'mod-001', reason: 'Ok' });
-    await request(app).post('/api/v1/reviews').send({
+    await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send({
       ...VALID_REVIEW,
       productId: 'a0000000-0000-0000-0000-000000000002',
     });
@@ -195,7 +195,7 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
   };
 
   it('approves a PENDING review and returns 200 with APPROVED status', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     expect(created.status).toBe(201);
     const reviewId = created.body._id;
 
@@ -208,7 +208,7 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
   });
 
   it('rejects a PENDING review and returns 200 with REJECTED status', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     const res = await request(app)
@@ -220,7 +220,7 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
   });
 
   it('appends a moderationHistory entry with moderatorId and reason', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     const res = await request(app)
@@ -246,7 +246,7 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
   });
 
   it('returns 409 when review is already moderated', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     await request(app)
@@ -262,7 +262,7 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
   });
 
   it('returns 400 when status field is missing', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     const res = await request(app)
@@ -274,7 +274,7 @@ describe('PATCH /api/v1/reviews/:id/moderate', () => {
   });
 
   it('returns 400 when status is an invalid value', async () => {
-    const created = await request(app).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(app).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     const res = await request(app)
@@ -302,7 +302,7 @@ describe('PATCH /api/v1/reviews/:id/moderate — hybrid PG write-back', () => {
     const statsRepo = createMockProductStatsRepo();
     const hybridApp = createTestApp({ productStatsRepo: statsRepo });
 
-    const created = await request(hybridApp).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(hybridApp).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     expect(created.status).toBe(201);
     const reviewId = created.body._id;
 
@@ -321,7 +321,7 @@ describe('PATCH /api/v1/reviews/:id/moderate — hybrid PG write-back', () => {
     const statsRepo = createMockProductStatsRepo();
     const hybridApp = createTestApp({ productStatsRepo: statsRepo });
 
-    const created = await request(hybridApp).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(hybridApp).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     const res = await request(hybridApp)
@@ -336,7 +336,7 @@ describe('PATCH /api/v1/reviews/:id/moderate — hybrid PG write-back', () => {
     const failingStatsRepo = createMockProductStatsRepo({ shouldFail: true });
     const hybridApp = createTestApp({ productStatsRepo: failingStatsRepo });
 
-    const created = await request(hybridApp).post('/api/v1/reviews').send(PENDING_REVIEW);
+    const created = await request(hybridApp).post('/api/v1/reviews').set('x-user-id', 'user-001').send(PENDING_REVIEW);
     const reviewId = created.body._id;
 
     const res = await request(hybridApp)

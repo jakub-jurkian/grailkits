@@ -7,6 +7,9 @@
 #   - exposed ports of the services on the host (easier access from Postman/curl)
 
 services:
+  postgres:
+    ports:
+      - "127.0.0.1:5432:5432"   # integration tests connect to localhost:5432
   catalog-service:
     environment:
       - NODE_ENV=development

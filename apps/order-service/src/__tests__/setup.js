@@ -1,15 +1,19 @@
 // Set DATABASE_URL before any Sequelize model is imported
-process.env.DATABASE_URL = 'postgres://root:rootpassword@localhost:5432/grailkits_test';
-process.env.NODE_ENV = 'test';
+process.env.DATABASE_URL =
+  process.env.TEST_DATABASE_URL ||
+  "postgres://root:rootpassword@localhost:5432/grailkits_test";
+process.env.NODE_ENV = "test";
 
 // Now safe to import — sequelize singleton will use the test DB
-const { sequelize } = require('../config/db');
-require('../models'); // registers all four models against the test sequelize instance
+const { sequelize } = require("../config/db");
+require("../models"); // registers all four models against the test sequelize instance
 
 async function setupDB() {
   // Drop & recreate tables. Also purge any stale ENUM types from previous runs
   // so that force:true doesn't trip over "type already exists" in Postgres.
-  await sequelize.query(`
+  await sequelize
+    .query(
+      `
     DO $$ DECLARE
       t TEXT;
     BEGIN
@@ -25,7 +29,9 @@ async function setupDB() {
         EXECUTE 'DROP TYPE IF EXISTS "' || t || '" CASCADE';
       END LOOP;
     END $$;
-  `).catch(() => {}); // non-fatal if DB doesn't exist yet
+  `,
+    )
+    .catch(() => {}); // non-fatal if DB doesn't exist yet
 
   await sequelize.sync({ force: true });
 }
