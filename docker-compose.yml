@@ -255,7 +255,11 @@ services:
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: grailkits_keycloak
-    command: start-dev
+    # --import-realm creates the grailkits realm (client, roles, demo users) from
+    # keycloak/grailkits-realm.json on first start; an existing realm is left untouched.
+    command: start-dev --import-realm
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
     environment:
       KC_HTTP_RELATIVE_PATH: /auth
       KC_DB: postgres
