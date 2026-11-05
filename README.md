@@ -76,7 +76,7 @@ flowchart LR
 ## Engineering Decisions
 
 - **Authentication at the edge, identity from the token.** The gateway verifies each JWT locally against
-  Keycloak's JWKS (no call to Keycloak per request), checks the issuer, then **strips any client-supplied
+  Keycloak's JWKS (no call to Keycloak per request), checks the issuer and audience, then **strips any client-supplied
   `x-user-id` and sets it from the token's `sub`**. Services never accept an identity the caller typed.
 - **Public reads, protected writes.** Catalogue and review `GET`s are public; carts, orders, checkout and
   payments require a token; review moderation requires the `admin` realm role.
@@ -112,7 +112,6 @@ database (`grailkits_test`, created by `docker/init-test-db.sql`).
   a crash between the two leaves the statistics stale until the next approval.
 - **Services trust the internal network.** They rely on the gateway for authentication; a zero-trust
   setup would validate the JWT in each service or use mTLS between them.
-- **No audience (`aud`) check** on tokens yet - only signature, expiry and issuer.
 - **Two ORMs in the Order service** (Sequelize for carts and orders, Prisma for payments) - accidental
   complexity worth consolidating.
 - **No CI pipeline or centralised logging/tracing yet.**

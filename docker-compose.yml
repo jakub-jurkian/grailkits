@@ -199,6 +199,7 @@ services:
       - REDIS_PASSWORD=${REDIS_PASSWORD}
       - KEYCLOAK_JWKS_URI=http://keycloak:8080/auth/realms/grailkits/protocol/openid-connect/certs
       - KEYCLOAK_ISSUER=http://localhost/auth/realms/grailkits
+      - KEYCLOAK_AUDIENCE=${KEYCLOAK_AUDIENCE:-grailkits-api}
     depends_on:
       redis:
         condition: service_healthy

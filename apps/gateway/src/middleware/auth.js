@@ -19,6 +19,8 @@ const authenticate = async (req, res, next) => {
     const { payload } = await jwtVerify(token, JWKS, {
       issuer:
         process.env.KEYCLOAK_ISSUER || "http://localhost/auth/realms/grailkits",
+      // Only accept tokens issued for this API, not any token from the same realm.
+      audience: process.env.KEYCLOAK_AUDIENCE || "grailkits-api",
     });
     req.user = payload;
     req.roles = payload.realm_access?.roles || [];
