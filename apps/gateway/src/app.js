@@ -12,6 +12,14 @@ const app = express();
 // Global CORS Configuration - the Gateway handles CORS for the entire system, so microservices don't strictly have to.
 app.use(cors());
 
+// The gateway runs behind exactly one proxy (Nginx). Trusting one hop makes req.ip the real
+// client address from X-Forwarded-For, so rate limiting is per client, not per Nginx.
+// X-Forwarded-For is a list: each proxy appends the address it received the request from.
+// X-Forwarded-For: <whatever the client typed>, 83.21.x.x
+//                                               ^ added by Nginx, trustworthy
+// 1 means “trust one hop”: Express takes the last entry, the one Nginx added, so the client can’t fake it.
+app.set("trust proxy", 1);
+
 const redisClient = new Redis({
   host: process.env.REDIS_HOST || "localhost",
   port: process.env.REDIS_PORT || 6379,
