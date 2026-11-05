@@ -130,6 +130,19 @@ cp .env.example .env          # fill in database, Redis and Keycloak credentials
 docker compose up --build     # everything behind Nginx on http://localhost
 ```
 
+On first start Keycloak imports the `grailkits` realm from [keycloak/grailkits-realm.json](keycloak/grailkits-realm.json):
+the `grailkits-frontend` client (Authorization Code + PKCE), the `user` and `admin` roles, and two demo accounts.
+Open http://localhost and log in with:
+
+| Username | Password | Role |
+|---|---|---|
+| `testuser` | `User123!` | user |
+| `testadmin` | `Admin123!` | admin (can moderate reviews) |
+
+The Keycloak admin console is at http://localhost/auth/admin/, using `KEYCLOAK_ADMIN_USER` / `KEYCLOAK_ADMIN_PASSWORD`
+from `.env`. The realm is imported only when it does not exist yet, so later changes made in the console are kept.
+The export contains no signing keys; Keycloak generates its own on first start.
+
 Developer mode - live code reload and direct service ports (3000-3003) for Postman:
 
 ```bash
